@@ -33,10 +33,10 @@ class Checksum : Callable<Int> {
         val lexer = HRPGLexer(CharStreams.fromString(grammarData))
         val tokens = CommonTokenStream(lexer)
         val parser = HRPGParser(tokens)
-        val tree = parser.top_level()
+        val tree = parser.topLevel()
 
         val builder = BuildAST()
-        val ast = builder.visitTop_level(tree)
+        val ast = builder.visitTopLevel(tree)
 
         println(ast)
         return 0

@@ -112,11 +112,11 @@ data class Grammar(val parserRules: List<ParserRule>, val tokenRules: List<Token
 
 
 class BuildAST : HRPGBaseVisitor<Any?>() {
-    override fun visitTop_level(ctx: HRPGParser.Top_levelContext?): Any {
+    override fun visitTopLevel(ctx: HRPGParser.TopLevelContext): Any {
         val parserRules = mutableListOf<ParserRule>()
         val tokenRules = mutableListOf<TokenRule>()
 
-        for (context in ctx?.entry() ?: listOf()) {
+        for (context in ctx.entry()) {
             when (val node = visit(context)) {
                 is ParserRule -> parserRules.add(node)
                 is TokenRule -> tokenRules.add(node)
@@ -126,25 +126,23 @@ class BuildAST : HRPGBaseVisitor<Any?>() {
         return Grammar(parserRules, tokenRules)
     }
 
-    override fun visitEntry(ctx: HRPGParser.EntryContext?): Any? =
-        if (ctx != null) visit(ctx.getChild(0)) else null
+    override fun visitEntry(ctx: HRPGParser.EntryContext): Any? = visit(ctx.getChild(0))
 
-    override fun visitParser_rule(ctx: HRPGParser.Parser_ruleContext?): Any? =
-        if (ctx != null) ParserRule(ctx.RULE_NAME(), visit(ctx.rule_body()) as Node) else null
+    override fun visitParseRule(ctx: HRPGParser.ParseRuleContext): Any =
+        ParserRule(ctx.RULE_NAME(), visit(ctx.ruleBody()) as Node)
 
-    override fun visitRule_body(ctx: HRPGParser.Rule_bodyContext?): Any? {
-        val nodes = ctx?.rule_piece()?.map { visit(it) } ?: listOf()
+    override fun visitRuleBody(ctx: HRPGParser.RuleBodyContext): Any? {
+        val nodes = ctx.rulePiece().map { visit(it) }
 
         return when (nodes.size) {
-            0 -> null
             1 -> nodes[0]
             else -> Alternatives(null, nodes.map { it as Node })
         }
     }
 
-    override fun visitRule_piece(ctx: HRPGParser.Rule_pieceContext?): Any? {
-        val nodes = ctx?.rule_part()?.map { visit(it) } ?: listOf()
-        val binding = ctx?.RULE_NAME()
+    override fun visitRulePiece(ctx: HRPGParser.RulePieceContext): Any? {
+        val nodes = ctx.rulePart().map { visit(it) }
+        val binding = ctx.RULE_NAME()
 
         return when (nodes.size) {
             0 -> null
@@ -153,13 +151,11 @@ class BuildAST : HRPGBaseVisitor<Any?>() {
         }
     }
 
-    override fun visitRule_part(ctx: HRPGParser.Rule_partContext?): Any? {
-        if (ctx == null) return null
-
-        val ruleBody = ctx.rule_body()
+    override fun visitRulePart(ctx: HRPGParser.RulePartContext): Any {
+        val ruleBody = ctx.ruleBody()
         if (ruleBody != null) return ZeroOrOne(null, visit(ruleBody) as Node, true)
 
-        val node = visit(ctx.rule_elem()) as Node
+        val node = visit(ctx.ruleElem()) as Node
         val suffixCtx = ctx.suffix()
         val suffix = if (suffixCtx != null) visit(suffixCtx) as TerminalNode? else null
 
@@ -172,27 +168,24 @@ class BuildAST : HRPGBaseVisitor<Any?>() {
         }
     }
 
-    override fun visitParensRuleBody(ctx: HRPGParser.ParensRuleBodyContext?): Any? =
-        if (ctx != null) visit(ctx.rule_body()) else null
+    override fun visitParensRuleBody(ctx: HRPGParser.ParensRuleBodyContext): Any? =
+        visit(ctx.ruleBody())
 
-    override fun visitTokRuleName(ctx: HRPGParser.TokRuleNameContext?): Any? =
-        if (ctx != null) RuleRef(null, ctx.RULE_NAME()) else null
+    override fun visitTokRuleName(ctx: HRPGParser.TokRuleNameContext): Any =
+        RuleRef(null, ctx.RULE_NAME())
 
-    override fun visitTokTokenName(ctx: HRPGParser.TokTokenNameContext?): Any? =
-        if (ctx != null) TokenRef(null, ctx.TOKEN_NAME()) else null
+    override fun visitTokTokenName(ctx: HRPGParser.TokTokenNameContext): Any =
+        TokenRef(null, ctx.TOKEN_NAME())
 
-    override fun visitTokTokenLit(ctx: HRPGParser.TokTokenLitContext?): Any? =
-        if (ctx != null) TokenLit(null, ctx.TOKEN_LIT()) else null
+    override fun visitTokTokenLit(ctx: HRPGParser.TokTokenLitContext): Any =
+        TokenLit(null, ctx.TOKEN_LIT())
 
-    override fun visitTokPlus(ctx: HRPGParser.TokPlusContext?): Any? = ctx?.PLUS()
+    override fun visitTokPlus(ctx: HRPGParser.TokPlusContext): Any? = ctx.PLUS()
 
-    override fun visitTokStar(ctx: HRPGParser.TokStarContext?): Any? = ctx?.STAR()
+    override fun visitTokStar(ctx: HRPGParser.TokStarContext): Any? = ctx.STAR()
 
-    override fun visitTokQuestMark(ctx: HRPGParser.TokQuestMarkContext?): Any? = ctx?.QUEST_MARK()
+    override fun visitTokQuestMark(ctx: HRPGParser.TokQuestMarkContext): Any? = ctx.QUEST_MARK()
 
-    override fun visitToken_rule(ctx: HRPGParser.Token_ruleContext?): Any? {
-        if (ctx == null) return null
-
-        return TokenRule(ctx.TOKEN_NAME(), TokenLit(null, ctx.TOKEN_LIT()))
-    }
+    override fun visitTokenRule(ctx: HRPGParser.TokenRuleContext): Any =
+        TokenRule(ctx.TOKEN_NAME(), TokenLit(null, ctx.TOKEN_LIT()))
 }

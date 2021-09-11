@@ -3,34 +3,34 @@
 
 grammar HRPG;
 
-top_level
+topLevel
     : (entry NL)* entry?
     ;
 
 entry
-    : parser_rule
-    | token_rule
+    : parseRule
+    | tokenRule
     ;
 
-parser_rule
-    : RULE_NAME NL_COLON rule_body
+parseRule
+    : RULE_NAME NL_COLON ruleBody
     ;
 
-rule_body
-    : rule_piece (NL_PIPE rule_piece)*
+ruleBody
+    : rulePiece (NL_PIPE rulePiece)*
     ;
 
-rule_piece
-    : (RULE_NAME '=')? rule_part+
+rulePiece
+    : (RULE_NAME '=')? rulePart+
     ;
 
-rule_part
-    : rule_elem suffix?
-    | LBRACKET rule_body RBRACKET
+rulePart
+    : ruleElem suffix?
+    | LBRACKET ruleBody RBRACKET
     ;
 
-rule_elem
-    : '(' rule_body ')' # parensRuleBody
+ruleElem
+    : '(' ruleBody ')' # parensRuleBody
     | RULE_NAME         # tokRuleName
     | TOKEN_NAME        # tokTokenName
     | TOKEN_LIT         # tokTokenLit
@@ -42,7 +42,7 @@ suffix
     | QUEST_MARK    # tokQuestMark
     ;
 
-token_rule
+tokenRule
     : TOKEN_NAME NL_COLON TOKEN_LIT
     ;
 
