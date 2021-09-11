@@ -1,0 +1,58 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.5.30'
+    id "org.jetbrains.kotlin.kapt" version "1.5.30"
+    id 'application'
+    id "com.github.johnrengelman.shadow" version "6.1.0"
+    id 'org.graalvm.buildtools.native' version '0.9.5'
+}
+
+defaultTasks("clean", "build")
+
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'info.picocli:picocli:4.6.1'
+    kapt 'info.picocli:picocli-codegen:4.6.1'
+}
+
+application {
+    mainClass = 'hrpg.MainKt'
+}
+
+kapt {
+    arguments {
+        arg("project", "${project.group}${project.name}")
+    }
+}
+
+graalvmNative {
+    binaries {
+        main {
+            mainClass = 'hrpg.MainKt'
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+
+    testLogging {
+        showStandardStreams = true
+    }
+}
+
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+}
+
+compileTestKotlin {
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+}
