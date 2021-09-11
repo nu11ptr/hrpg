@@ -1,0 +1,23 @@
+value
+    : dict
+    | list
+    | STRING
+    | NUMBER
+    | 'true'
+    | 'false'
+    | 'null'
+
+list: '[' [elems = value (elems2 = ',' value)*] ']'
+
+dict: '{' [pairs = pair (pairs2 = ',' pair)*] '}'
+pair: STRING ':' value
+
+TRUE: 'true'
+FALSE: 'false'
+NULL: 'null'
+LBRACKET: '['
+RBRACKET: ']'
+LBRACE: '{'
+RBRACE: '}'
+COMMA: ','
+COLON: ':'
