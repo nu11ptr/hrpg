@@ -35,10 +35,14 @@ class Checksum : Callable<Int> {
         val parser = HRPGParser(tokens)
         val tree = parser.topLevel()
 
-        val builder = BuildAST()
-        val ast = builder.visitTopLevel(tree)
+        val ast = BuildAST().visitTopLevel(tree) as Grammar
+        val (grammar, tokenNames, errors) = ASTProcess(ast).process()
 
         println(ast)
+        println()
+        println(tokenNames)
+        println(errors)
+        println(grammar)
         return 0
     }
 }
