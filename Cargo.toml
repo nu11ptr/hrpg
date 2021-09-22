@@ -1,0 +1,8 @@
+[package]
+name = "hrpg"
+description = "Human Readable Parser Generator"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+clap = "2.33.3"
