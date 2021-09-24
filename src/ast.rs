@@ -6,9 +6,9 @@ pub enum Node {
     Binding { name: String, node: Box<Node> },
 
     // rule_body
-    Alternatives { nodes: Vec<Box<Node>> },
+    Alternatives { nodes: Vec<Node> },
     // rule_piece
-    MultipartBody { nodes: Vec<Box<Node>> },
+    MultipartBody { nodes: Vec<Node> },
     // rule_part
     ZeroOrMore { node: Box<Node> },
     // rule_part
@@ -36,7 +36,7 @@ impl Comment for Node {
 
             Node::MultipartBody { nodes } => {
                 let comments: Vec<String> = nodes.into_iter().map(|node| {
-                    match node.as_ref() {
+                    match node {
                         Node::Alternatives { .. } => format!("({})", node.comment()),
                         _ => node.comment(),
                     }
@@ -77,24 +77,32 @@ impl Comment for Node {
     }
 }
 
-pub enum Rule {
-    // parser_rule
-    ParserRule { name: String, node: Box<Node> },
-    // token_rule
-    TokenRule { name: String, literal: Box<Node> },
+// parser_rule
+struct ParserRule {
+    name: String,
+    node: Node,
 }
 
-impl Comment for Rule {
+impl Comment for ParserRule {
     fn comment(&self) -> String {
-        match self {
-            Rule::ParserRule { name, node } => format!("{}: {}", name, node.comment()),
-            Rule::TokenRule { name, literal } => format!("{}: {}", name, literal.comment()),
-        }
+        format!("{}: {}", self.name, self.node.comment())
+    }
+}
+
+// token_rule
+struct TokenRule {
+    name: String,
+    literal: Node,
+}
+
+impl Comment for TokenRule {
+    fn comment(&self) -> String {
+        format!("{}: {}", self.name, self.literal.comment())
     }
 }
 
 // top_level
 pub struct Grammar {
-    parser_rules: Vec<Box<Node>>,
-    token_rules: Vec<Box<Node>>,
+    parser_rules: Vec<ParserRule>,
+    token_rules: Vec<TokenRule>,
 }
