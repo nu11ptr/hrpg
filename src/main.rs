@@ -1,5 +1,7 @@
 use clap::{App, Arg};
 
+mod ast;
+
 fn main() {
     let app = App::new("Human Readable Parser Generator")
         .version("v0.1.0")

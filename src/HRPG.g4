@@ -30,7 +30,7 @@ rulePart
     ;
 
 ruleElem
-    : '(' ruleBody ')' # parensRuleBody
+    : '(' ruleBody ')'  # parensRuleBody
     | RULE_NAME         # tokRuleName
     | TOKEN_NAME        # tokTokenName
     | TOKEN_LIT         # tokTokenLit
