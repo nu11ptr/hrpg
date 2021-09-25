@@ -202,9 +202,6 @@ fn parse_node(pair: Pair<Rule>) -> Node {
         Rule::rule_name => Node::RuleRef { name: pair.as_str().to_string() },
         Rule::token_name => Node::TokenRef { name: pair.as_str().to_string(), replaced_lit: None },
         Rule::token_lit => Node::TokenLit { literal: pair.as_str().to_string() },
-        _ => {
-            println!("{:?}", pair.as_rule());
-            unreachable!()
-        }
+        _ => unreachable!()
     }
 }
