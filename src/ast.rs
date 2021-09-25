@@ -177,19 +177,16 @@ fn parse_node(pair: Pair<Rule>) -> Node {
             }
         }
         Rule::rule_part => {
-            let mut inner_rules = pair.into_inner();
+            let mut inner_rules = pair.clone().into_inner();
             let first_inner = inner_rules.next().unwrap();
             let node = parse_node(first_inner.clone());
 
             match first_inner.as_rule() {
-                Rule::rule_elem => match inner_rules.next() {
-                    Some(p) => match p.as_str() {
-                        "+" => Node::OneOrMore { node: Box::new(node) },
-                        "*" => Node::ZeroOrMore { node: Box::new(node) },
-                        "?" => Node::ZeroOrOne { node: Box::new(node), brackets: false },
-                        _ => unreachable!()
-                    }
-                    None => node,
+                Rule::rule_elem => match pair.as_str().chars().last() {
+                    Some('+') => Node::OneOrMore { node: Box::new(node) },
+                    Some('*') => Node::ZeroOrMore { node: Box::new(node) },
+                    Some('?') => Node::ZeroOrOne { node: Box::new(node), brackets: false },
+                    _ => node,
                 }
                 Rule::rule_body => Node::ZeroOrOne { node: Box::new(node), brackets: true },
                 _ => unreachable!()
