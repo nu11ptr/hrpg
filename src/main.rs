@@ -1,11 +1,8 @@
-#[macro_use]
-extern crate pest_derive;
-
 use std::fs;
 
 use clap::{App, Arg};
 
-mod ast;
+use hrpg_core::ast;
 
 fn main() {
     let app = App::new("Human Readable Parser Generator")

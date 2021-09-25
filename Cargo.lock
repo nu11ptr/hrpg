@@ -114,6 +114,13 @@ name = "hrpg"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "hrpg_core",
+]
+
+[[package]]
+name = "hrpg_core"
+version = "0.1.0"
+dependencies = [
  "pest",
  "pest_derive",
 ]
