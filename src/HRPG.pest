@@ -10,21 +10,19 @@ rule_body = { rule_piece ~ ("|" ~ rule_piece)* }
 
 rule_piece = { (rule_name ~ "=")? ~ rule_part+ }
 
-rule_part = { rule_elem ~ suffix? | "[" ~ rule_body ~ "]" }
+rule_part = { rule_elem ~ ("+" | "*" | "?")? | "[" ~ rule_body ~ "]" }
 
 rule_elem = { "(" ~ rule_body ~ ")" | rule_name | token_name | token_lit }
-
-suffix = { "+" | "*" | "?" }
 
 token_rule = { token_name ~ ":" ~ token_lit ~ ";" }
 
 // 'Lexer' rules
 
-rule_name = ${ ASCII_ALPHA_LOWER ~ (ASCII_ALPHA | ASCII_DIGIT | "_")* }
+rule_name = @{ ASCII_ALPHA_LOWER ~ (ASCII_ALPHA | ASCII_DIGIT | "_")* }
 
-token_name = ${ ASCII_ALPHA_UPPER ~ (ASCII_ALPHA | ASCII_DIGIT | "_")* }
+token_name = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHA | ASCII_DIGIT | "_")* }
 
-token_lit = ${ "'" ~ !"'"* ~ "'"}
+token_lit = @{ "'" ~ (!"'" ~ ANY)* ~ "'"}
 
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 

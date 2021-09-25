@@ -1,3 +1,8 @@
+#[macro_use]
+extern crate pest_derive;
+
+use std::fs;
+
 use clap::{App, Arg};
 
 mod ast;
@@ -20,5 +25,9 @@ fn main() {
     let grammar = matches.value_of("INPUT");
 
     println!("Grammar: {}", grammar.unwrap());
-    println!("Config: {}", config.unwrap_or("<N/A>"))
+    println!("Config: {}", config.unwrap_or("<N/A>"));
+
+    let data = fs::read_to_string(grammar.unwrap()).expect("File not found");
+    let g = ast::parse_hrpg(&data).unwrap();
+    println!("{:?}", g);
 }
