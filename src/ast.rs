@@ -12,7 +12,7 @@ trait Comment {
 
 #[derive(Debug)]
 pub enum Node {
-    Binding { name: Box<Node>, node: Box<Node> },
+    Binding { name: String, node: Box<Node> },
 
     // rule_body
     Alternatives { nodes: Vec<Node> },
@@ -33,16 +33,15 @@ pub enum Node {
     TokenLit { literal: String },
 
     // parser_rule
-    ParserRule { name: Box<Node>, node: Box<Node> },
+    ParserRule { name: String, node: Box<Node> },
     // token_rule
-    TokenRule { name: Box<Node>, literal: Box<Node> },
+    TokenRule { name: String, literal: Box<Node> },
 }
 
 impl Comment for Node {
     fn comment(&self) -> String {
         match self {
-            Node::Binding { name, node } =>
-                format!("{}={}", name.comment(), node.comment()),
+            Node::Binding { name, node } => format!("{}={}", name, node.comment()),
 
             Node::Alternatives { nodes } => {
                 let comments: Vec<String> = nodes.into_iter().map(|node| { node.comment() }).collect();
@@ -97,9 +96,9 @@ impl Comment for Node {
 
             Node::TokenLit { literal } => format!("\"{}\"", literal),
 
-            Node::ParserRule { name, node } => format!("{}: {}", name.comment(), node.comment()),
+            Node::ParserRule { name, node } => format!("{}: {}", name, node.comment()),
 
-            Node::TokenRule { name, literal } => format!("{}: {}", name.comment(), literal.comment()),
+            Node::TokenRule { name, literal } => format!("{}: {}", name, literal.comment()),
         }
     }
 }
@@ -142,9 +141,9 @@ fn parse_node(pair: Pair<Rule>) -> Node {
         Rule::entry => parse_node(pair.into_inner().next().unwrap()),
         Rule::parse_rule => {
             let mut inner_rules = pair.into_inner();
-            let rule_name = parse_node(inner_rules.next().unwrap());
+            let rule_name = inner_rules.next().unwrap().as_str().to_string();
             let rule_body = parse_node(inner_rules.next().unwrap());
-            Node::ParserRule { name: Box::new(rule_name), node: Box::new(rule_body) }
+            Node::ParserRule { name: rule_name, node: Box::new(rule_body) }
         }
         Rule::rule_body => {
             let mut nodes: Vec<Node> = pair.into_inner().map(parse_node).collect();
@@ -171,7 +170,7 @@ fn parse_node(pair: Pair<Rule>) -> Node {
             // Do we have a binding and rules or just rules?
             match first_inner.as_rule() {
                 Rule::rule_name => Node::Binding {
-                    name: Box::new(parse_node(first_inner)),
+                    name: first_inner.as_str().to_string(),
                     node: Box::new(process_rules(inner_rules)),
                 },
                 _ => process_rules(saved_inner_rules),
@@ -199,9 +198,9 @@ fn parse_node(pair: Pair<Rule>) -> Node {
         Rule::rule_elem => parse_node(pair.into_inner().next().unwrap()),
         Rule::token_rule => {
             let mut inner = pair.into_inner();
-            let token_name = parse_node(inner.next().unwrap());
+            let token_name = inner.next().unwrap().as_str().to_string();
             let token_lit = parse_node(inner.next().unwrap());
-            Node::TokenRule { name: Box::new(token_name), literal: Box::new(token_lit) }
+            Node::TokenRule { name: token_name, literal: Box::new(token_lit) }
         }
         Rule::rule_name => Node::RuleRef { name: pair.as_str().to_string() },
         Rule::token_name => Node::TokenRef { name: pair.as_str().to_string(), replaced_lit: None },
