@@ -44,12 +44,12 @@ impl Comment for Node {
             Node::Binding { name, node } => format!("{}={}", name, node.comment()),
 
             Node::Alternatives { nodes } => {
-                let comments: Vec<String> = nodes.into_iter().map(|node| { node.comment() }).collect();
+                let comments: Vec<String> = nodes.iter().map(|node| { node.comment() }).collect();
                 comments.join(" | ")
             }
 
             Node::MultipartBody { nodes } => {
-                let comments: Vec<String> = nodes.into_iter().map(|node| {
+                let comments: Vec<String> = nodes.iter().map(|node| {
                     match node {
                         Node::Alternatives { .. } => format!("({})", node.comment()),
                         _ => node.comment(),

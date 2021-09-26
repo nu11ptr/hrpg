@@ -32,11 +32,11 @@ impl Process {
         let parser_rules = &grammar.parser_rules;
 
         let token_rules: Vec<Node> = token_rules
-            .into_iter()
+            .iter()
             .map(|node| { self.process_token_rule(node) })
             .collect();
         let parser_rules: Vec<Node> = parser_rules
-            .into_iter()
+            .iter()
             .map(|node| { self.process_parser_rule(node) })
             .collect();
         Grammar { parser_rules: token_rules, token_rules: parser_rules }
@@ -53,8 +53,8 @@ impl Process {
                     Node::TokenLit { literal } => strip_quotes(literal),
                     _ => unreachable!()
                 };
-                &self.literals.insert(lit, (name.to_string(), None));
-                &self.token_names.insert(name.to_string());
+                self.literals.insert(lit, (name.to_string(), None));
+                self.token_names.insert(name.to_string());
 
                 node.clone()
             }
@@ -79,10 +79,10 @@ impl Process {
                 node: Box::new(self.process_node(node)),
             },
             Node::Alternatives { nodes } => Node::Alternatives {
-                nodes: nodes.into_iter().map(|node| { self.process_node(node) }).collect()
+                nodes: nodes.iter().map(|node| { self.process_node(node) }).collect()
             },
             Node::MultipartBody { nodes } => Node::MultipartBody {
-                nodes: nodes.into_iter().map(|node| { self.process_node(node) }).collect()
+                nodes: nodes.iter().map(|node| { self.process_node(node) }).collect()
             },
             Node::ZeroOrMore { node } => Node::ZeroOrMore {
                 node: Box::new(self.process_node(node))
@@ -96,7 +96,7 @@ impl Process {
             },
             Node::RuleRef { .. } => node.clone(),
             Node::TokenRef { name, replaced_lit: _replaced_lit } => {
-                &self.token_names.insert(name.to_string());
+                self.token_names.insert(name.to_string());
                 node.clone()
             }
             Node::TokenLit { literal } => {
@@ -104,7 +104,7 @@ impl Process {
                 let lit = strip_quotes(literal);
 
                 // Try and find the literal to ensure it has a corresponding rule
-                match &self.literals.get(&lit) {
+                match self.literals.get(&lit).cloned() {
                     Some((_name, Some(token_ref))) => token_ref.clone(),
                     Some((name, None)) => {
                         let token_ref = Node::TokenRef {
@@ -112,11 +112,11 @@ impl Process {
                             replaced_lit: Some(literal.to_string()),
                         };
                         let ref_copy = token_ref.clone();
-                        &self.literals.insert(lit, (name.to_string(), Some(token_ref)));
+                        self.literals.insert(lit, (name.to_string(), Some(token_ref)));
                         ref_copy
                     }
                     None => {
-                        &self.log_error(&format!("Literal {} does not have corresponding rule", literal));
+                        self.log_error(&format!("Literal {} does not have corresponding rule", literal));
                         node.clone()
                     }
                 }
