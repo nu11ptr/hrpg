@@ -26,4 +26,4 @@ token_lit = @{ "'" ~ (!"'" ~ ANY)* ~ "'"}
 
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 
-COMMENT = _{ "#" ~ ANY* ~ NEWLINE+ }
+COMMENT = _{ "#" ~ (!"\n" ~ ANY)* ~ NEWLINE+ }
