@@ -1,9 +1,10 @@
+use std::error::Error;
 use std::fs;
 
 use clap::{App, Arg};
 
-use hrpg_core::{ast, process};
-use std::error::Error;
+use hrpg_core::ast::parse_hrpg;
+use hrpg_core::transform::Transform;
 
 fn main() {
     let app = App::new("Human Readable Parser Generator")
@@ -33,16 +34,15 @@ fn process_input(input_file: &str, config_file: Option<&str>) -> Result<(), Box<
     println!("Config: {}\n", config_file.unwrap_or("<N/A>"));
 
     let data = fs::read_to_string(input_file)?;
-    let g = ast::parse_hrpg(&data)?;
+    let g = parse_hrpg(&data)?;
 
     println!("Original AST: {:?}\n", g);
 
-    let mut proc = process::Process::new();
-    let g2 = proc.process(&g);
-    println!("Transformed AST: {:?}\n", g2);
+    let g2 = Transform::process(&g);
+    println!("Transformed AST: {:?}\n", g2.0);
 
-    println!("Tokens: {:?}", proc.token_names);
-    println!("Errors: {:?}", proc.errors);
+    println!("Tokens: {:?}", g2.1.token_names);
+    println!("Errors: {:?}", g2.1.errors);
 
     Ok(())
 }

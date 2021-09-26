@@ -5,9 +5,10 @@ use crate::ast::{Grammar, Node};
 const EOF: &str = "EOF";
 const ILLEGAL: &str = "ILLEGAL";
 
-pub struct Process {
-    pub token_names: HashSet<String>,
+pub struct Transform {
     literals: HashMap<String, (String, Option<Node>)>,
+
+    pub token_names: HashSet<String>,
     pub errors: Vec<String>,
 }
 
@@ -18,28 +19,30 @@ fn strip_quotes(str: &str) -> String {
     chars.as_str().to_string()
 }
 
-impl Process {
-    pub fn new() -> Process {
+impl Transform {
+    fn new() -> Transform {
         let mut token_names = HashSet::new();
         token_names.insert(EOF.to_string());
         token_names.insert(ILLEGAL.to_string());
 
-        Process { token_names, literals: HashMap::new(), errors: vec![] }
+        Transform { token_names, literals: HashMap::new(), errors: vec![] }
     }
 
-    pub fn process(&mut self, grammar: &Grammar) -> Grammar {
+    pub fn process(grammar: &Grammar) -> (Grammar, Transform) {
         let token_rules = &grammar.token_rules;
         let parser_rules = &grammar.parser_rules;
 
+        let mut transform = Transform::new();
+
         let token_rules: Vec<Node> = token_rules
             .iter()
-            .map(|node| { self.process_token_rule(node) })
+            .map(|node| { transform.process_token_rule(node) })
             .collect();
         let parser_rules: Vec<Node> = parser_rules
             .iter()
-            .map(|node| { self.process_parser_rule(node) })
+            .map(|node| { transform.process_parser_rule(node) })
             .collect();
-        Grammar { parser_rules: token_rules, token_rules: parser_rules }
+        (Grammar { parser_rules: token_rules, token_rules: parser_rules }, transform)
     }
 
     fn log_error(&mut self, msg: &str) {
