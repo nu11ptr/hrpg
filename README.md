@@ -40,19 +40,8 @@ In development - it is not ready for use in any way
 
 ## Building
 
-### Fat Jar
-
-The resulting JAR file can be found in `build/libs`. The 'fat' jar has an `-all` suffix.
+The resulting executable file can be found at `target/release/hrpg`.
 
 ```shell
-./gradlew
-```
-
-### Native Image
-
-The resulting `hrpg` binary can be found in `build/native/nativeCompile`
-
-```shell
-export GRAALVM_HOME=<graalvm_dir>
-./gradlew nativeCompile
+cargo build --release
 ```

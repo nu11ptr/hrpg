@@ -2,7 +2,7 @@ use std::fs;
 
 use clap::{App, Arg};
 
-use hrpg_core::ast;
+use hrpg_core::{ast, process};
 
 fn main() {
     let app = App::new("Human Readable Parser Generator")
@@ -26,5 +26,12 @@ fn main() {
 
     let data = fs::read_to_string(grammar.unwrap()).expect("File not found");
     let g = ast::parse_hrpg(&data).unwrap();
-    println!("{:?}", g);
+    println!("Original AST: {:?}\n", g);
+
+    let mut proc = process::Process::new();
+    let g2 = proc.process(&g);
+    println!("Transformed AST: {:?}\n", g2);
+
+    println!("Tokens: {:?}", proc.token_names);
+    println!("Errors: {:?}", proc.errors);
 }

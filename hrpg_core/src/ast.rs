@@ -10,7 +10,7 @@ trait Comment {
     fn comment(&self) -> String;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Node {
     Binding { name: String, node: Box<Node> },
 
@@ -106,8 +106,8 @@ impl Comment for Node {
 // top_level
 #[derive(Debug)]
 pub struct Grammar {
-    parser_rules: Vec<Node>,
-    token_rules: Vec<Node>,
+    pub parser_rules: Vec<Node>,
+    pub token_rules: Vec<Node>,
 }
 
 #[derive(Parser)]
