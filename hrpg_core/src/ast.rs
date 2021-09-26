@@ -5,6 +5,7 @@ use pest::iterators::Pair;
 use pest::Parser;
 
 use self::pest::iterators::Pairs;
+use Node::*;
 
 trait Comment {
     fn comment(&self) -> String;
@@ -41,64 +42,64 @@ pub enum Node {
 impl Comment for Node {
     fn comment(&self) -> String {
         match self {
-            Node::Binding { name, node } => format!("{}={}", name, node.comment()),
+            Binding { name, node } => format!("{}={}", name, node.comment()),
 
-            Node::Alternatives { nodes } => {
+            Alternatives { nodes } => {
                 let comments: Vec<String> = nodes.iter().map(|node| { node.comment() }).collect();
                 comments.join(" | ")
             }
 
-            Node::MultipartBody { nodes } => {
+            MultipartBody { nodes } => {
                 let comments: Vec<String> = nodes.iter().map(|node| {
                     match node {
-                        Node::Alternatives { .. } => format!("({})", node.comment()),
+                        Alternatives { .. } => format!("({})", node.comment()),
                         _ => node.comment(),
                     }
                 }).collect();
                 comments.join(" ")
             }
 
-            Node::ZeroOrMore { node } => match node.as_ref() {
+            ZeroOrMore { node } => match node.as_ref() {
                 // Regular Nodes
-                Node::RuleRef { .. } | Node::TokenRef { .. } | Node::TokenLit { .. } =>
+                RuleRef { .. } | TokenRef { .. } | TokenLit { .. } =>
                     format!("{}*", node.comment()),
                 // Containers
                 _ => format!("({})*", node.comment())
             },
 
-            Node::OneOrMore { node } => match node.as_ref() {
+            OneOrMore { node } => match node.as_ref() {
                 // Regular Nodes
-                Node::RuleRef { .. } | Node::TokenRef { .. } | Node::TokenLit { .. } =>
+                RuleRef { .. } | TokenRef { .. } | TokenLit { .. } =>
                     format!("{}+", node.comment()),
                 // Containers
                 _ => format!("({})+", node.comment())
             },
 
-            Node::ZeroOrOne { node, brackets } =>
+            ZeroOrOne { node, brackets } =>
                 if *brackets {
                     format!("[{}]", node.comment())
                 } else {
                     match node.as_ref() {
                         // Regular Nodes
-                        Node::RuleRef { .. } | Node::TokenRef { .. } | Node::TokenLit { .. } =>
+                        RuleRef { .. } | TokenRef { .. } | TokenLit { .. } =>
                             format!("{}?", node.comment()),
                         // Containers
                         _ => format!("({})?", node.comment())
                     }
                 },
 
-            Node::RuleRef { name } => name.to_string(),
+            RuleRef { name } => name.to_string(),
 
-            Node::TokenRef { name, replaced_lit } => (match replaced_lit {
+            TokenRef { name, replaced_lit } => (match replaced_lit {
                 Some(lit) => lit,
                 None => name,
             }).to_string(),
 
-            Node::TokenLit { literal } => format!("\"{}\"", literal),
+            TokenLit { literal } => format!("\"{}\"", literal),
 
-            Node::ParserRule { name, node } => format!("{}: {}", name, node.comment()),
+            ParserRule { name, node } => format!("{}: {}", name, node.comment()),
 
-            Node::TokenRule { name, literal } => format!("{}: {}", name, literal.comment()),
+            TokenRule { name, literal } => format!("{}: {}", name, literal.comment()),
         }
     }
 }
@@ -127,8 +128,8 @@ pub fn parse_hrpg(data: &str) -> Result<Grammar, Error<Rule>> {
 
     for node in nodes {
         match node {
-            Node::ParserRule { .. } => parser_rules.push(node),
-            Node::TokenRule { .. } => token_rules.push(node),
+            ParserRule { .. } => parser_rules.push(node),
+            TokenRule { .. } => token_rules.push(node),
             _ => unreachable!(),
         }
     }
@@ -143,13 +144,13 @@ fn parse_node(pair: Pair<Rule>) -> Node {
             let mut inner_rules = pair.into_inner();
             let rule_name = inner_rules.next().unwrap().as_str().to_string();
             let rule_body = parse_node(inner_rules.next().unwrap());
-            Node::ParserRule { name: rule_name, node: Box::new(rule_body) }
+            ParserRule { name: rule_name, node: Box::new(rule_body) }
         }
         Rule::rule_body => {
             let mut nodes: Vec<Node> = pair.into_inner().map(parse_node).collect();
             match nodes.len() {
                 1 => nodes.remove(0),
-                _ => Node::Alternatives { nodes }
+                _ => Alternatives { nodes }
             }
         }
         Rule::rule_piece => {
@@ -163,13 +164,13 @@ fn parse_node(pair: Pair<Rule>) -> Node {
 
                 match nodes.len() {
                     1 => nodes.remove(0),
-                    _ => Node::MultipartBody { nodes }
+                    _ => MultipartBody { nodes }
                 }
             }
 
             // Do we have a binding and rules or just rules?
             match first_inner.as_rule() {
-                Rule::rule_name => Node::Binding {
+                Rule::rule_name => Binding {
                     name: first_inner.as_str().to_string(),
                     node: Box::new(process_rules(inner_rules)),
                 },
@@ -183,12 +184,12 @@ fn parse_node(pair: Pair<Rule>) -> Node {
 
             match first_inner.as_rule() {
                 Rule::rule_elem => match pair.as_str().chars().last() {
-                    Some('+') => Node::OneOrMore { node: Box::new(node) },
-                    Some('*') => Node::ZeroOrMore { node: Box::new(node) },
-                    Some('?') => Node::ZeroOrOne { node: Box::new(node), brackets: false },
+                    Some('+') => OneOrMore { node: Box::new(node) },
+                    Some('*') => ZeroOrMore { node: Box::new(node) },
+                    Some('?') => ZeroOrOne { node: Box::new(node), brackets: false },
                     _ => node,
                 }
-                Rule::rule_body => Node::ZeroOrOne { node: Box::new(node), brackets: true },
+                Rule::rule_body => ZeroOrOne { node: Box::new(node), brackets: true },
                 _ => unreachable!()
             }
         }
@@ -197,11 +198,11 @@ fn parse_node(pair: Pair<Rule>) -> Node {
             let mut inner = pair.into_inner();
             let token_name = inner.next().unwrap().as_str().to_string();
             let token_lit = parse_node(inner.next().unwrap());
-            Node::TokenRule { name: token_name, literal: Box::new(token_lit) }
+            TokenRule { name: token_name, literal: Box::new(token_lit) }
         }
-        Rule::rule_name => Node::RuleRef { name: pair.as_str().to_string() },
-        Rule::token_name => Node::TokenRef { name: pair.as_str().to_string(), replaced_lit: None },
-        Rule::token_lit => Node::TokenLit { literal: pair.as_str().to_string() },
+        Rule::rule_name => RuleRef { name: pair.as_str().to_string() },
+        Rule::token_name => TokenRef { name: pair.as_str().to_string(), replaced_lit: None },
+        Rule::token_lit => TokenLit { literal: pair.as_str().to_string() },
         _ => unreachable!()
     }
 }

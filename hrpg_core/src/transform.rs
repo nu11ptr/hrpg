@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::{Grammar, Node};
+use crate::ast::Node::*;
 
 const EOF: &str = "EOF";
 const ILLEGAL: &str = "ILLEGAL";
@@ -51,9 +52,9 @@ impl Transform {
 
     fn process_token_rule(&mut self, node: &Node) -> Node {
         match node {
-            Node::TokenRule { name, literal } => {
+            TokenRule { name, literal } => {
                 let lit = match literal.as_ref() {
-                    Node::TokenLit { literal } => strip_quotes(literal),
+                    TokenLit { literal } => strip_quotes(literal),
                     _ => unreachable!()
                 };
                 self.literals.insert(lit, (name.to_string(), None));
@@ -67,7 +68,7 @@ impl Transform {
 
     fn process_parser_rule(&mut self, node: &Node) -> Node {
         match node {
-            Node::ParserRule { name, node } => Node::ParserRule {
+            ParserRule { name, node } => ParserRule {
                 name: name.to_string(),
                 node: Box::new(self.process_node(node)),
             },
@@ -77,32 +78,32 @@ impl Transform {
 
     fn process_node(&mut self, node: &Node) -> Node {
         match node {
-            Node::Binding { name, node } => Node::Binding {
+            Binding { name, node } => Binding {
                 name: name.to_string(),
                 node: Box::new(self.process_node(node)),
             },
-            Node::Alternatives { nodes } => Node::Alternatives {
+            Alternatives { nodes } => Alternatives {
                 nodes: nodes.iter().map(|node| { self.process_node(node) }).collect()
             },
-            Node::MultipartBody { nodes } => Node::MultipartBody {
+            MultipartBody { nodes } => MultipartBody {
                 nodes: nodes.iter().map(|node| { self.process_node(node) }).collect()
             },
-            Node::ZeroOrMore { node } => Node::ZeroOrMore {
+            ZeroOrMore { node } => ZeroOrMore {
                 node: Box::new(self.process_node(node))
             },
-            Node::OneOrMore { node } => Node::OneOrMore {
+            OneOrMore { node } => OneOrMore {
                 node: Box::new(self.process_node(node))
             },
-            Node::ZeroOrOne { node, brackets } => Node::ZeroOrOne {
+            ZeroOrOne { node, brackets } => ZeroOrOne {
                 node: Box::new(self.process_node(node)),
                 brackets: *brackets,
             },
-            Node::RuleRef { .. } => node.clone(),
-            Node::TokenRef { name, replaced_lit: _replaced_lit } => {
+            RuleRef { .. } => node.clone(),
+            TokenRef { name, replaced_lit: _replaced_lit } => {
                 self.token_names.insert(name.to_string());
                 node.clone()
             }
-            Node::TokenLit { literal } => {
+            TokenLit { literal } => {
                 // Strip quotes and use as lookup key
                 let lit = strip_quotes(literal);
 
@@ -110,7 +111,7 @@ impl Transform {
                 match self.literals.get(&lit).cloned() {
                     Some((_name, Some(token_ref))) => token_ref.clone(),
                     Some((name, None)) => {
-                        let token_ref = Node::TokenRef {
+                        let token_ref = TokenRef {
                             name: name.to_string(),
                             replaced_lit: Some(literal.to_string()),
                         };
