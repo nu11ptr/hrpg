@@ -1,6 +1,7 @@
-use crate::tokens::{Token, TokenType, Tokenizer};
+use crate::tokens::{Token, TokenType, Tokenizer, TreeNode};
+use std::collections::HashMap;
 
-struct Parser<LEX: Tokenizer<TOK>, TOK: Token> {
+pub struct Parser<LEX: Tokenizer<TOK>, TOK: Token> {
     tokenizer: LEX,
     pos: usize,
     tokens: Vec<TOK>,
@@ -82,5 +83,72 @@ impl<LEX: Tokenizer<TOK>, TOK: Token> Parser<LEX, TOK> {
         }
 
         tokens
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Func {
+    ParseValue,
+}
+
+pub enum TokenOrNode<TOK: Token, NODE: TreeNode> {
+    Token(TOK),
+    Node(NODE),
+    None,
+}
+
+impl<TOK: Token, NODE: TreeNode> TokenOrNode<TOK, NODE> {
+    pub fn to_option(self) -> Option<TokenOrNode<TOK, NODE>> {
+        match self {
+            TokenOrNode::Token(_) => Some(self),
+            TokenOrNode::Node(_) => Some(self),
+            TokenOrNode::None => None,
+        }
+    }
+}
+
+pub struct JSONParser<LEX: Tokenizer<TOK>, TOK: Token, NODE: TreeNode> {
+    parser: Parser<LEX, TOK>,
+    memos: HashMap<(Func, usize), (TokenOrNode<TOK, NODE>, usize)>,
+}
+
+impl<LEX: Tokenizer<TOK>, TOK: Token, NODE: TreeNode> JSONParser<LEX, TOK, NODE> {
+    // value: dict | list | STRING | NUMBER | 'true' | 'false' | 'null'
+    pub fn parse_value(&mut self) -> TokenOrNode<TOK, NODE> {
+        let old_pos = self.parser.pos;
+
+        // dict
+        if let Some(dict) = self.parse_dict().to_option() {
+            dict
+        // list
+        } else if let Some(list) = self.parse_list().to_option() {
+            list
+        // STRING
+        } else if let Some(string) = self.parser.try_match_token(TokenType::String) {
+            TokenOrNode::Token(string)
+        // NUMBER
+        } else if let Some(number) = self.parser.try_match_token(TokenType::Number) {
+            TokenOrNode::Token(number)
+        // 'true'
+        } else if let Some(true_) = self.parser.try_match_token(TokenType::True) {
+            TokenOrNode::Token(true_)
+        // 'false'
+        } else if let Some(false_) = self.parser.try_match_token(TokenType::False) {
+            TokenOrNode::Token(false_)
+        // 'null'
+        } else if let Some(null) = self.parser.try_match_token(TokenType::Null) {
+            TokenOrNode::Token(null)
+        } else {
+            self.parser.pos = old_pos;
+            TokenOrNode::None
+        }
+    }
+
+    pub fn parse_dict(&self) -> TokenOrNode<TOK, NODE> {
+        TokenOrNode::None
+    }
+
+    pub fn parse_list(&self) -> TokenOrNode<TOK, NODE> {
+        TokenOrNode::None
     }
 }

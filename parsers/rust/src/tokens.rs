@@ -15,7 +15,9 @@ pub enum TokenType {
     Illegal,
 }
 
-pub trait Token: Clone {
+pub trait TreeNode {}
+
+pub trait Token: TreeNode + Clone {
     fn token_type(&self) -> TokenType;
 }
 
