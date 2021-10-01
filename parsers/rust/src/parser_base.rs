@@ -1,4 +1,5 @@
 use crate::tokens::{Token, TokenType, Tokenizer, TreeNode};
+use parser::memoize;
 use std::collections::HashMap;
 
 pub struct Parser<LEX: Tokenizer<TOK>, TOK: Token> {
@@ -86,11 +87,14 @@ impl<LEX: Tokenizer<TOK>, TOK: Token> Parser<LEX, TOK> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Func {
     ParseValue,
+    ParseDict,
+    ParseList,
 }
 
+#[derive(Clone)]
 pub enum TokenOrNode<TOK: Token, NODE: TreeNode> {
     Token(TOK),
     Node(NODE),
@@ -98,7 +102,7 @@ pub enum TokenOrNode<TOK: Token, NODE: TreeNode> {
 }
 
 impl<TOK: Token, NODE: TreeNode> TokenOrNode<TOK, NODE> {
-    pub fn to_option(self) -> Option<TokenOrNode<TOK, NODE>> {
+    pub fn into_option(self) -> Option<TokenOrNode<TOK, NODE>> {
         match self {
             TokenOrNode::Token(_) => Some(self),
             TokenOrNode::Node(_) => Some(self),
@@ -114,14 +118,15 @@ pub struct JSONParser<LEX: Tokenizer<TOK>, TOK: Token, NODE: TreeNode> {
 
 impl<LEX: Tokenizer<TOK>, TOK: Token, NODE: TreeNode> JSONParser<LEX, TOK, NODE> {
     // value: dict | list | STRING | NUMBER | 'true' | 'false' | 'null'
+    #[memoize]
     pub fn parse_value(&mut self) -> TokenOrNode<TOK, NODE> {
         let old_pos = self.parser.pos;
 
         // dict
-        if let Some(dict) = self.parse_dict().to_option() {
+        if let Some(dict) = self.parse_dict().into_option() {
             dict
         // list
-        } else if let Some(list) = self.parse_list().to_option() {
+        } else if let Some(list) = self.parse_list().into_option() {
             list
         // STRING
         } else if let Some(string) = self.parser.try_match_token(TokenType::String) {
@@ -144,10 +149,14 @@ impl<LEX: Tokenizer<TOK>, TOK: Token, NODE: TreeNode> JSONParser<LEX, TOK, NODE>
         }
     }
 
+    // dict: '{' [pair (',' pair)*] '}'
+    #[memoize]
     pub fn parse_dict(&self) -> TokenOrNode<TOK, NODE> {
         TokenOrNode::None
     }
 
+    // list: '[' [value (',' value)*] ']'
+    #[memoize]
     pub fn parse_list(&self) -> TokenOrNode<TOK, NODE> {
         TokenOrNode::None
     }
