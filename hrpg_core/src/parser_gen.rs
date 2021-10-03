@@ -1,5 +1,4 @@
 use crate::ast::Grammar;
-use std::any::Any;
 
 #[derive(Clone, Debug)]
 enum Type {

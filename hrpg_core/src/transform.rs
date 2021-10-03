@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::ast::{Grammar, Node};
 use crate::ast::Node::*;
+use crate::ast::{Grammar, Node};
 
 const EOF: &str = "EOF";
 const ILLEGAL: &str = "ILLEGAL";
@@ -26,7 +26,11 @@ impl Transform {
         token_names.insert(EOF.to_string());
         token_names.insert(ILLEGAL.to_string());
 
-        Transform { token_names, literals: HashMap::new(), errors: vec![] }
+        Transform {
+            token_names,
+            literals: HashMap::new(),
+            errors: vec![],
+        }
     }
 
     pub fn process(grammar: &Grammar) -> (Grammar, Transform) {
@@ -37,13 +41,19 @@ impl Transform {
 
         let token_rules: Vec<Node> = token_rules
             .iter()
-            .map(|node| { transform.process_token_rule(node) })
+            .map(|node| transform.process_token_rule(node))
             .collect();
         let parser_rules: Vec<Node> = parser_rules
             .iter()
-            .map(|node| { transform.process_parser_rule(node) })
+            .map(|node| transform.process_parser_rule(node))
             .collect();
-        (Grammar { parser_rules: token_rules, token_rules: parser_rules }, transform)
+        (
+            Grammar {
+                parser_rules,
+                token_rules,
+            },
+            transform,
+        )
     }
 
     fn log_error(&mut self, msg: &str) {
@@ -55,14 +65,14 @@ impl Transform {
             TokenRule { name, literal } => {
                 let lit = match literal.as_ref() {
                     TokenLit { literal } => strip_quotes(literal),
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 };
                 self.literals.insert(lit, (name.to_string(), None));
                 self.token_names.insert(name.to_string());
 
                 node.clone()
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -72,7 +82,7 @@ impl Transform {
                 name: name.to_string(),
                 node: Box::new(self.process_node(node)),
             },
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -83,23 +93,26 @@ impl Transform {
                 node: Box::new(self.process_node(node)),
             },
             Alternatives { nodes } => Alternatives {
-                nodes: nodes.iter().map(|node| { self.process_node(node) }).collect()
+                nodes: nodes.iter().map(|node| self.process_node(node)).collect(),
             },
             MultipartBody { nodes } => MultipartBody {
-                nodes: nodes.iter().map(|node| { self.process_node(node) }).collect()
+                nodes: nodes.iter().map(|node| self.process_node(node)).collect(),
             },
             ZeroOrMore { node } => ZeroOrMore {
-                node: Box::new(self.process_node(node))
+                node: Box::new(self.process_node(node)),
             },
             OneOrMore { node } => OneOrMore {
-                node: Box::new(self.process_node(node))
+                node: Box::new(self.process_node(node)),
             },
             ZeroOrOne { node, brackets } => ZeroOrOne {
                 node: Box::new(self.process_node(node)),
                 brackets: *brackets,
             },
             RuleRef { .. } => node.clone(),
-            TokenRef { name, replaced_lit: _replaced_lit } => {
+            TokenRef {
+                name,
+                replaced_lit: _replaced_lit,
+            } => {
                 self.token_names.insert(name.to_string());
                 node.clone()
             }
@@ -116,16 +129,20 @@ impl Transform {
                             replaced_lit: Some(literal.to_string()),
                         };
                         let ref_copy = token_ref.clone();
-                        self.literals.insert(lit, (name.to_string(), Some(token_ref)));
+                        self.literals
+                            .insert(lit, (name.to_string(), Some(token_ref)));
                         ref_copy
                     }
                     None => {
-                        self.log_error(&format!("Literal {} does not have corresponding rule", literal));
+                        self.log_error(&format!(
+                            "Literal {} does not have corresponding rule",
+                            literal
+                        ));
                         node.clone()
                     }
                 }
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }

@@ -1,48 +1,89 @@
 use std::error::Error;
 use std::fs;
 
-use clap::{App, Arg};
+use clap::{AppSettings, Clap};
 
 use hrpg_core::ast::parse_hrpg;
+use hrpg_core::diagram::draw_diagram;
 use hrpg_core::transform::Transform;
 
+/// Human Readable Parser Generator
+#[derive(Clap)]
+#[clap(version = "v0.1.0")]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Options {
+    #[clap(subcommand)]
+    sub_cmd: SubCommands,
+}
+
+#[derive(Clap)]
+enum SubCommands {
+    Build(Build),
+    Draw(Draw),
+}
+
+/// Build lexer/parser from a grammar
+#[derive(Clap)]
+struct Build {
+    /// Configuration file specifying overrides to the default configuration
+    #[clap(short, long)]
+    config_file: Option<String>,
+
+    /// The grammar file to build
+    input_file: String,
+}
+
+/// Draw railroad/syntax diagram from a grammar
+#[derive(Clap)]
+struct Draw {
+    /// The grammar file to draw
+    input_file: String,
+}
+
 fn main() {
-    let app = App::new("Human Readable Parser Generator")
-        .version("v0.1.0")
-        .arg(Arg::with_name("config")
-            .short("c")
-            .long("config")
-            .takes_value(true)
-            .help("Configuration file specifying overrides to the default configuration"))
-        .arg(Arg::with_name("INPUT")
-            .required(true)
-            .index(1)
-            .help("The grammar file to parse"));
+    let options = Options::parse();
 
-    let matches = app.get_matches();
-    let config_file = matches.value_of("config");
-    let input_file = matches.value_of("INPUT");
-
-    match process_input(input_file.unwrap(), config_file) {
-        Ok(_) => (),
+    let result = match options.sub_cmd {
+        SubCommands::Build(build) => process_build(&build),
+        SubCommands::Draw(draw) => process_draw(&draw),
+    };
+    match result {
+        Ok(Some(str)) => println!("{}", str),
+        Ok(None) => (),
         Err(err) => println!("An error occurred: {}", err),
     }
 }
 
-fn process_input(input_file: &str, config_file: Option<&str>) -> Result<(), Box<dyn Error>> {
-    println!("Grammar: {}", input_file);
-    println!("Config: {}\n", config_file.unwrap_or("<N/A>"));
+fn process_build(build: &Build) -> Result<Option<String>, Box<dyn Error>> {
+    println!("Grammar: {}", &build.input_file);
+    println!(
+        "Config: {}\n",
+        build.config_file.as_ref().unwrap_or(&"<N/A>".to_owned())
+    );
 
-    let data = fs::read_to_string(input_file)?;
+    let data = fs::read_to_string(&build.input_file)?;
     let g = parse_hrpg(&data)?;
 
     println!("Original AST: {:?}\n", g);
 
-    let g2 = Transform::process(&g);
-    println!("Transformed AST: {:?}\n", g2.0);
+    let (g2, transform) = Transform::process(&g);
+    println!("Transformed AST: {:?}\n", g2);
 
-    println!("Tokens: {:?}", g2.1.token_names);
-    println!("Errors: {:?}", g2.1.errors);
+    println!("Tokens: {:?}", &transform.token_names);
+    println!("Errors: {:?}", &transform.errors);
 
-    Ok(())
+    Ok(None)
+}
+
+fn process_draw(draw: &Draw) -> Result<Option<String>, Box<dyn Error>> {
+    eprintln!("Grammar: {}", &draw.input_file);
+    let data = fs::read_to_string(&draw.input_file)?;
+    let g = parse_hrpg(&data)?;
+    let (g2, transform) = Transform::process(&g);
+
+    if *&transform.errors.is_empty() {
+        Ok(Some(format!("{}", draw_diagram(&g2))))
+    } else {
+        Err(format!("{:?}", &transform.errors))?
+    }
 }
