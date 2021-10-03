@@ -1,0 +1,34 @@
+grammar: (entry NL)* entry?;
+
+entry: rule | token_rule;
+
+### Parser ###
+
+rule: RULE_NAME NL? ':' rule_body;
+
+rule_body: rule_part+ (NL? '|' rule_part+)*;
+
+binding: RULE_NAME '=';
+
+rule_part: binding? (rule_elem suffix? | '[' rule_body ']');
+
+rule_elem: '(' rule_body ')' | RULE_NAME | TOKEN_NAME | TOKEN_LIT;
+
+suffix: '+' | '*' | '?';
+
+### Lexer ###
+
+token_rule: TOKEN_NAME ':' TOKEN_LIT;
+
+# *** Lexer rules ***
+
+COLON: ':';
+PIPE: '|';
+EQUALS: '=';
+LBRACKET: '[';
+RBRACKET: ']';
+LPAREN: '(';
+RPAREN: ')';
+PLUS: '+';
+STAR: '*';
+QUEST_MARK: '?';
