@@ -3,9 +3,9 @@ use std::fs;
 
 use clap::{AppSettings, Clap};
 
-use hrpg_core::ast::parse_hrpg;
-use hrpg_core::diagram::draw_diagram;
-use hrpg_core::transform::Transform;
+use hrpg::ast::parse_hrpg;
+use hrpg::diagram::draw_diagram;
+use hrpg::transform::Transform;
 
 /// Human Readable Parser Generator
 #[derive(Clap)]
