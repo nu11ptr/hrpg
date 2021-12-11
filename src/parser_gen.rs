@@ -47,7 +47,7 @@ enum Decl {
 struct ParserGen {}
 
 impl ParserGen {
-    pub fn generate(grammar: Grammar) -> Vec<Decl> {
+    pub fn generate(_grammar: Grammar) -> Vec<Decl> {
         todo!()
     }
 }

@@ -122,7 +122,7 @@ impl Transform {
 
                 // Try and find the literal to ensure it has a corresponding rule
                 match self.literals.get(&lit).cloned() {
-                    Some((_name, Some(token_ref))) => token_ref.clone(),
+                    Some((_name, Some(token_ref))) => token_ref,
                     Some((name, None)) => {
                         let token_ref = TokenRef {
                             name: name.to_string(),
@@ -130,7 +130,7 @@ impl Transform {
                         };
                         let ref_copy = token_ref.clone();
                         self.literals
-                            .insert(lit, (name.to_string(), Some(token_ref)));
+                            .insert(lit, (name, Some(token_ref)));
                         ref_copy
                     }
                     None => {

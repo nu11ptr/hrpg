@@ -5,8 +5,8 @@ pub fn draw_diagram(grammar: &Grammar) -> Diagram<Box<dyn RailroadNode>> {
     let token_rules = &grammar.token_rules;
     let parser_rules = &grammar.parser_rules;
 
-    let mut nodes: Vec<Box<dyn RailroadNode>> = parser_rules.into_iter().map(make_node).collect();
-    let token_nodes: Vec<Box<dyn RailroadNode>> = token_rules.into_iter().map(make_node).collect();
+    let mut nodes: Vec<Box<dyn RailroadNode>> = parser_rules.iter().map(make_node).collect();
+    let token_nodes: Vec<Box<dyn RailroadNode>> = token_rules.iter().map(make_node).collect();
     nodes.extend(token_nodes);
 
     let root = Box::new(railroad::VerticalGrid::new(nodes));
@@ -30,10 +30,10 @@ fn make_node(node: &Node) -> Box<dyn RailroadNode> {
     use Node::*;
 
     match node {
-        Binding { name, node } => make_node(node),
-        Alternatives { nodes } => Box::new(Choice::new(nodes.into_iter().map(make_node).collect())),
+        Binding { name: _, node } => make_node(node),
+        Alternatives { nodes } => Box::new(Choice::new(nodes.iter().map(make_node).collect())),
         MultipartBody { nodes } => {
-            Box::new(Sequence::new(nodes.into_iter().map(make_node).collect()))
+            Box::new(Sequence::new(nodes.iter().map(make_node).collect()))
         }
         ZeroOrMore { node } => {
             let repeat = Box::new(Repeat::new(make_node(node), Empty));

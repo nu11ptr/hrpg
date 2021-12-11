@@ -85,9 +85,9 @@ fn process_draw(draw: &Draw) -> Result<Option<String>, Box<dyn Error>> {
     let g = parse_hrpg(&data)?;
     let (g2, transform) = Transform::process(&g);
 
-    if *&transform.errors.is_empty() {
+    if transform.errors.is_empty() {
         Ok(Some(format!("{}", draw_diagram(&g2))))
     } else {
-        Err(format!("{:?}", &transform.errors))?
+        return Err(format!("{:?}", &transform.errors).into())
     }
 }
