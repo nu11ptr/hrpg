@@ -48,9 +48,10 @@ fn main() {
         SubCommands::Build(build) => process_build(&build),
         SubCommands::Draw(draw) => process_draw(&draw),
     };
+
     match result {
         Ok(Some(str)) => println!("{}", str),
-        Ok(None) => (),
+        Ok(None) => {}
         Err(err) => eprintln!("An error occurred: {}", err),
     }
 }
@@ -88,6 +89,6 @@ fn process_draw(draw: &Draw) -> Result<Option<String>, Box<dyn Error>> {
     if transform.errors.is_empty() {
         Ok(Some(format!("{}", draw_diagram(&g2))))
     } else {
-        return Err(format!("{:?}", &transform.errors).into())
+        return Err(format!("{:?}", &transform.errors).into());
     }
 }

@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::ast::Node::*;
-use crate::ast::{Grammar, Node};
+use crate::ast::{
+    Alternatives, Binding, Grammar, MultipartBody, Node, OneOrMore, ParserRule, RuleRef, TokenLit,
+    TokenRef, TokenRule, ZeroOrMore, ZeroOrOne,
+};
 
 const EOF: &str = "EOF";
 const ILLEGAL: &str = "ILLEGAL";
@@ -39,13 +41,13 @@ impl Transform {
 
         let mut transform = Transform::new();
 
-        let token_rules: Vec<Node> = token_rules
+        let token_rules = token_rules
             .iter()
-            .map(|node| transform.process_token_rule(node))
+            .map(|rule| transform.process_token_rule(rule))
             .collect();
-        let parser_rules: Vec<Node> = parser_rules
+        let parser_rules = parser_rules
             .iter()
-            .map(|node| transform.process_parser_rule(node))
+            .map(|rule| transform.process_parser_rule(rule))
             .collect();
         (
             Grammar {
@@ -60,78 +62,76 @@ impl Transform {
         self.errors.push(format!("ERROR: {}", msg));
     }
 
-    fn process_token_rule(&mut self, node: &Node) -> Node {
-        match node {
-            TokenRule { name, literal } => {
-                let lit = match literal.as_ref() {
-                    TokenLit { literal } => strip_quotes(literal),
-                    _ => unreachable!(),
-                };
-                self.literals.insert(lit, (name.to_string(), None));
-                self.token_names.insert(name.to_string());
-
-                node.clone()
-            }
+    fn process_token_rule(&mut self, rule: &TokenRule) -> TokenRule {
+        let TokenRule { name, literal } = rule;
+        let lit = match literal {
+            Node::TokLit(TokenLit { literal }) => strip_quotes(literal),
             _ => unreachable!(),
-        }
+        };
+        self.literals.insert(lit, (name.to_string(), None));
+        self.token_names.insert(name.to_string());
+
+        rule.clone()
     }
 
-    fn process_parser_rule(&mut self, node: &Node) -> Node {
-        match node {
-            ParserRule { name, node } => ParserRule {
-                name: name.to_string(),
-                node: Box::new(self.process_node(node)),
-            },
-            _ => unreachable!(),
+    fn process_parser_rule(&mut self, rule: &ParserRule) -> ParserRule {
+        ParserRule {
+            name: rule.name.to_string(),
+            node: self.process_node(&rule.node),
         }
     }
 
     fn process_node(&mut self, node: &Node) -> Node {
         match node {
-            Binding { name, node } => Binding {
+            Node::Bind(Binding { name, node }) => Binding {
                 name: name.to_string(),
                 node: Box::new(self.process_node(node)),
-            },
-            Alternatives { nodes } => Alternatives {
+            }
+            .into(),
+            Node::Alt(Alternatives { nodes }) => Alternatives {
                 nodes: nodes.iter().map(|node| self.process_node(node)).collect(),
-            },
-            MultipartBody { nodes } => MultipartBody {
+            }
+            .into(),
+            Node::Multi(MultipartBody { nodes }) => MultipartBody {
                 nodes: nodes.iter().map(|node| self.process_node(node)).collect(),
-            },
-            ZeroOrMore { node } => ZeroOrMore {
+            }
+            .into(),
+            Node::ZoM(ZeroOrMore { node }) => ZeroOrMore {
                 node: Box::new(self.process_node(node)),
-            },
-            OneOrMore { node } => OneOrMore {
+            }
+            .into(),
+            Node::OoM(OneOrMore { node }) => OneOrMore {
                 node: Box::new(self.process_node(node)),
-            },
-            ZeroOrOne { node, brackets } => ZeroOrOne {
+            }
+            .into(),
+            Node::ZoO(ZeroOrOne { node, brackets }) => ZeroOrOne {
                 node: Box::new(self.process_node(node)),
                 brackets: *brackets,
-            },
-            RuleRef { .. } => node.clone(),
-            TokenRef {
+            }
+            .into(),
+            Node::RulRef(RuleRef { .. }) => node.clone(),
+            Node::TokRef(TokenRef {
                 name,
                 replaced_lit: _replaced_lit,
-            } => {
+            }) => {
                 self.token_names.insert(name.to_string());
                 node.clone()
             }
-            TokenLit { literal } => {
+            Node::TokLit(TokenLit { literal }) => {
                 // Strip quotes and use as lookup key
                 let lit = strip_quotes(literal);
 
                 // Try and find the literal to ensure it has a corresponding rule
                 match self.literals.get(&lit).cloned() {
-                    Some((_name, Some(token_ref))) => token_ref,
+                    Some((_, Some(token_ref))) => token_ref,
                     Some((name, None)) => {
                         let token_ref = TokenRef {
-                            name: name.to_string(),
+                            name: name.clone(),
                             replaced_lit: Some(literal.to_string()),
                         };
                         let ref_copy = token_ref.clone();
-                        self.literals
-                            .insert(lit, (name, Some(token_ref)));
-                        ref_copy
+                        self.literals.insert(lit, (name, Some(token_ref.into())));
+                        ref_copy.into()
                     }
                     None => {
                         self.log_error(&format!(
@@ -142,7 +142,6 @@ impl Transform {
                     }
                 }
             }
-            _ => unreachable!(),
         }
     }
 }

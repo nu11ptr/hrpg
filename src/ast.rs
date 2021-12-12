@@ -1,170 +1,318 @@
 extern crate pest;
 
-use pest::error::Error;
-use pest::iterators::Pair;
 use pest::Parser;
-
-use self::pest::iterators::Pairs;
-use Node::*;
 
 trait Comment {
     fn comment(&self) -> String;
 }
 
+// *** Rules ***
+
+enum RuleType {
+    Parser(ParserRule),
+    Token(TokenRule),
+}
+
+impl From<ParserRule> for RuleType {
+    fn from(rule: ParserRule) -> Self {
+        RuleType::Parser(rule)
+    }
+}
+
+impl From<TokenRule> for RuleType {
+    fn from(rule: TokenRule) -> Self {
+        RuleType::Token(rule)
+    }
+}
+
+// parser_rule
+#[derive(Clone, Debug)]
+pub struct ParserRule {
+    pub name: String,
+    pub node: Node,
+}
+
+// token_rule
+#[derive(Clone, Debug)]
+pub struct TokenRule {
+    pub name: String,
+    pub literal: Node,
+}
+
+// *** Nodes ***
+
+// rule_body
+#[derive(Clone, Debug)]
+pub struct Alternatives {
+    pub nodes: Vec<Node>,
+}
+
+impl Comment for Alternatives {
+    #[inline]
+    fn comment(&self) -> String {
+        let comments: Vec<String> = self.nodes.iter().map(|node| node.comment()).collect();
+        comments.join(" | ")
+    }
+}
+
+// rule_piece
+#[derive(Clone, Debug)]
+pub struct MultipartBody {
+    pub nodes: Vec<Node>,
+}
+
+impl Comment for MultipartBody {
+    fn comment(&self) -> String {
+        let comments: Vec<String> = self
+            .nodes
+            .iter()
+            .map(|node| match node {
+                Node::Alt(_) => format!("({})", node.comment()),
+                _ => node.comment(),
+            })
+            .collect();
+        comments.join(" ")
+    }
+}
+
+// binding
+#[derive(Clone, Debug)]
+pub struct Binding {
+    pub name: String,
+    pub node: Box<Node>,
+}
+
+impl Comment for Binding {
+    #[inline]
+    fn comment(&self) -> String {
+        format!("{}={}", self.name, self.node.comment())
+    }
+}
+
+// rule_part
+#[derive(Clone, Debug)]
+pub struct ZeroOrMore {
+    pub node: Box<Node>,
+}
+
+impl Comment for ZeroOrMore {
+    fn comment(&self) -> String {
+        match self.node.as_ref() {
+            // Regular Nodes
+            Node::RulRef(_) | Node::TokRef(_) | Node::TokLit(_) => {
+                format!("{}*", self.node.comment())
+            }
+            // Containers
+            _ => format!("({})*", self.node.comment()),
+        }
+    }
+}
+
+// rule_part
+#[derive(Clone, Debug)]
+pub struct OneOrMore {
+    pub node: Box<Node>,
+}
+
+impl Comment for OneOrMore {
+    fn comment(&self) -> String {
+        match self.node.as_ref() {
+            // Regular Nodes
+            Node::RulRef(_) | Node::TokRef(_) | Node::TokLit(_) => {
+                format!("{}+", self.node.comment())
+            }
+            // Containers
+            _ => format!("({})+", self.node.comment()),
+        }
+    }
+}
+
+// rule_part
+#[derive(Clone, Debug)]
+pub struct ZeroOrOne {
+    pub node: Box<Node>,
+    pub brackets: bool,
+}
+
+impl Comment for ZeroOrOne {
+    fn comment(&self) -> String {
+        if self.brackets {
+            format!("[{}]", self.node.comment())
+        } else {
+            match self.node.as_ref() {
+                // Regular Nodes
+                Node::RulRef(_) | Node::TokRef(_) | Node::TokLit(_) => {
+                    format!("{}?", self.node.comment())
+                }
+                // Containers
+                _ => format!("({})?", self.node.comment()),
+            }
+        }
+    }
+}
+
+// RULE_NAME
+#[derive(Clone, Debug)]
+pub struct RuleRef {
+    pub name: String,
+}
+
+impl Comment for RuleRef {
+    #[inline]
+    fn comment(&self) -> String {
+        self.name.to_owned()
+    }
+}
+
+// TOKEN_NAME
+#[derive(Clone, Debug)]
+pub struct TokenRef {
+    pub name: String,
+    pub replaced_lit: Option<String>,
+}
+
+impl Comment for TokenRef {
+    fn comment(&self) -> String {
+        (match &self.replaced_lit {
+            Some(lit) => lit,
+            None => &self.name,
+        })
+        .to_owned()
+    }
+}
+
+// TOKEN_LIT
+#[derive(Clone, Debug)]
+pub struct TokenLit {
+    pub literal: String,
+}
+
+impl Comment for TokenLit {
+    #[inline]
+    fn comment(&self) -> String {
+        format!("\"{}\"", self.literal)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Node {
-    Binding {
-        name: String,
-        node: Box<Node>,
-    },
+    Alt(Alternatives),
+    Multi(MultipartBody),
 
-    // rule_body
-    Alternatives {
-        nodes: Vec<Node>,
-    },
-    // rule_piece
-    MultipartBody {
-        nodes: Vec<Node>,
-    },
-    // rule_part
-    ZeroOrMore {
-        node: Box<Node>,
-    },
-    // rule_part
-    OneOrMore {
-        node: Box<Node>,
-    },
-    // rule_part
-    ZeroOrOne {
-        node: Box<Node>,
-        brackets: bool,
-    },
+    Bind(Binding),
 
-    // RULE_NAME
-    RuleRef {
-        name: String,
-    },
-    // TOKEN_NAME
-    TokenRef {
-        name: String,
-        replaced_lit: Option<String>,
-    },
-    // TOKEN_LIT
-    TokenLit {
-        literal: String,
-    },
+    ZoM(ZeroOrMore),
+    OoM(OneOrMore),
+    ZoO(ZeroOrOne),
 
-    // parser_rule
-    ParserRule {
-        name: String,
-        node: Box<Node>,
-    },
-    // token_rule
-    TokenRule {
-        name: String,
-        literal: Box<Node>,
-    },
+    RulRef(RuleRef),
+    TokRef(TokenRef),
+    TokLit(TokenLit),
 }
 
 impl Comment for Node {
     fn comment(&self) -> String {
+        use Node::*;
+
         match self {
-            Binding { name, node } => format!("{}={}", name, node.comment()),
+            Alt(a) => a.comment(),
+            Multi(m) => m.comment(),
 
-            Alternatives { nodes } => {
-                let comments: Vec<String> = nodes.iter().map(|node| node.comment()).collect();
-                comments.join(" | ")
-            }
+            Bind(b) => b.comment(),
 
-            MultipartBody { nodes } => {
-                let comments: Vec<String> = nodes
-                    .iter()
-                    .map(|node| match node {
-                        Alternatives { .. } => format!("({})", node.comment()),
-                        _ => node.comment(),
-                    })
-                    .collect();
-                comments.join(" ")
-            }
+            ZoM(z) => z.comment(),
+            OoM(o) => o.comment(),
+            ZoO(z) => z.comment(),
 
-            ZeroOrMore { node } => match node.as_ref() {
-                // Regular Nodes
-                RuleRef { .. } | TokenRef { .. } | TokenLit { .. } => {
-                    format!("{}*", node.comment())
-                }
-                // Containers
-                _ => format!("({})*", node.comment()),
-            },
+            RulRef(r) => r.comment(),
+            TokRef(t) => t.comment(),
 
-            OneOrMore { node } => match node.as_ref() {
-                // Regular Nodes
-                RuleRef { .. } | TokenRef { .. } | TokenLit { .. } => {
-                    format!("{}+", node.comment())
-                }
-                // Containers
-                _ => format!("({})+", node.comment()),
-            },
-
-            ZeroOrOne { node, brackets } => {
-                if *brackets {
-                    format!("[{}]", node.comment())
-                } else {
-                    match node.as_ref() {
-                        // Regular Nodes
-                        RuleRef { .. } | TokenRef { .. } | TokenLit { .. } => {
-                            format!("{}?", node.comment())
-                        }
-                        // Containers
-                        _ => format!("({})?", node.comment()),
-                    }
-                }
-            }
-
-            RuleRef { name } => name.to_owned(),
-
-            TokenRef { name, replaced_lit } => (match replaced_lit {
-                Some(lit) => lit,
-                None => name,
-            })
-            .to_owned(),
-
-            TokenLit { literal } => format!("\"{}\"", literal),
-
-            ParserRule { name, node } => format!("{}: {}", name, node.comment()),
-
-            TokenRule { name, literal } => format!("{}: {}", name, literal.comment()),
+            TokLit(t) => t.comment(),
         }
+    }
+}
+
+impl From<Alternatives> for Node {
+    fn from(alt: Alternatives) -> Self {
+        Node::Alt(alt)
+    }
+}
+
+impl From<MultipartBody> for Node {
+    fn from(mult: MultipartBody) -> Self {
+        Node::Multi(mult)
+    }
+}
+
+impl From<Binding> for Node {
+    fn from(bind: Binding) -> Self {
+        Node::Bind(bind)
+    }
+}
+
+impl From<ZeroOrMore> for Node {
+    fn from(zero: ZeroOrMore) -> Self {
+        Node::ZoM(zero)
+    }
+}
+
+impl From<OneOrMore> for Node {
+    fn from(one: OneOrMore) -> Self {
+        Node::OoM(one)
+    }
+}
+
+impl From<ZeroOrOne> for Node {
+    fn from(zero: ZeroOrOne) -> Self {
+        Node::ZoO(zero)
+    }
+}
+
+impl From<RuleRef> for Node {
+    fn from(rr: RuleRef) -> Self {
+        Node::RulRef(rr)
+    }
+}
+
+impl From<TokenRef> for Node {
+    fn from(tr: TokenRef) -> Self {
+        Node::TokRef(tr)
+    }
+}
+
+impl From<TokenLit> for Node {
+    fn from(tok: TokenLit) -> Self {
+        Node::TokLit(tok)
     }
 }
 
 // top_level
 #[derive(Debug)]
 pub struct Grammar {
-    pub parser_rules: Vec<Node>,
-    pub token_rules: Vec<Node>,
+    pub parser_rules: Vec<ParserRule>,
+    pub token_rules: Vec<TokenRule>,
 }
 
-#[derive(Parser)]
+#[derive(pest_derive::Parser)]
 #[grammar = "HRPG.pest"]
 struct HRPGParser;
 
-pub fn parse_hrpg(data: &str) -> Result<Grammar, Error<Rule>> {
-    let nodes: Vec<Node> = HRPGParser::parse(Rule::top_level, data)?
+pub fn parse_hrpg(data: &str) -> Result<Grammar, pest::error::Error<Rule>> {
+    let nodes: Vec<RuleType> = HRPGParser::parse(Rule::top_level, data)?
         .next()
         .unwrap()
         .into_inner()
         .filter(|p| p.as_rule() == Rule::entry)
-        .map(parse_node)
+        .map(parse_rule_type)
         .collect();
 
-    let mut parser_rules: Vec<Node> = vec![];
-    let mut token_rules: Vec<Node> = vec![];
+    let mut parser_rules: Vec<ParserRule> = vec![];
+    let mut token_rules: Vec<TokenRule> = vec![];
 
     for node in nodes {
         match node {
-            ParserRule { .. } => parser_rules.push(node),
-            TokenRule { .. } => token_rules.push(node),
-            _ => unreachable!(),
+            RuleType::Parser(rule) => parser_rules.push(rule),
+            RuleType::Token(rule) => token_rules.push(rule),
         }
     }
 
@@ -174,37 +322,57 @@ pub fn parse_hrpg(data: &str) -> Result<Grammar, Error<Rule>> {
     })
 }
 
-fn parse_node(pair: Pair<Rule>) -> Node {
+fn parse_rule_type(pair: pest::iterators::Pair<Rule>) -> RuleType {
     match pair.as_rule() {
-        Rule::entry => parse_node(pair.into_inner().next().unwrap()),
+        Rule::entry => parse_rule_type(pair.into_inner().next().unwrap()),
         Rule::parse_rule => {
             let mut inner_rules = pair.into_inner();
             let rule_name = inner_rules.next().unwrap().as_str().to_owned();
             let rule_body = parse_node(inner_rules.next().unwrap());
             ParserRule {
                 name: rule_name,
-                node: Box::new(rule_body),
+                node: rule_body,
             }
+            .into()
         }
+
+        Rule::token_rule => {
+            let mut inner = pair.into_inner();
+            let token_name = inner.next().unwrap().as_str().to_owned();
+            let token_lit = parse_node(inner.next().unwrap());
+            TokenRule {
+                name: token_name,
+                literal: token_lit,
+            }
+            .into()
+        }
+
+        _ => unreachable!(),
+    }
+}
+
+fn parse_node(pair: pest::iterators::Pair<Rule>) -> Node {
+    match pair.as_rule() {
         Rule::rule_body => {
             let mut nodes: Vec<Node> = pair.into_inner().map(parse_node).collect();
             match nodes.len() {
                 1 => nodes.remove(0),
-                _ => Alternatives { nodes },
+                _ => Alternatives { nodes }.into(),
             }
         }
+
         Rule::rule_piece => {
             let mut inner_rules = pair.into_inner();
             // Make a copy of our iterator in case there is no binding
             let saved_inner_rules = inner_rules.clone();
             let first_inner = inner_rules.next().unwrap();
 
-            fn process_rules(inner_rules: Pairs<Rule>) -> Node {
+            fn process_rules(inner_rules: pest::iterators::Pairs<Rule>) -> Node {
                 let mut nodes: Vec<Node> = inner_rules.map(parse_node).collect();
 
                 match nodes.len() {
                     1 => nodes.remove(0),
-                    _ => MultipartBody { nodes },
+                    _ => MultipartBody { nodes }.into(),
                 }
             }
 
@@ -213,10 +381,12 @@ fn parse_node(pair: Pair<Rule>) -> Node {
                 Rule::rule_name => Binding {
                     name: first_inner.as_str().to_owned(),
                     node: Box::new(process_rules(inner_rules)),
-                },
+                }
+                .into(),
                 _ => process_rules(saved_inner_rules),
             }
         }
+
         Rule::rule_part => {
             let mut inner_rules = pair.clone().into_inner();
             let first_inner = inner_rules.next().unwrap();
@@ -226,43 +396,46 @@ fn parse_node(pair: Pair<Rule>) -> Node {
                 Rule::rule_elem => match pair.as_str().chars().last() {
                     Some('+') => OneOrMore {
                         node: Box::new(node),
-                    },
+                    }
+                    .into(),
                     Some('*') => ZeroOrMore {
                         node: Box::new(node),
-                    },
+                    }
+                    .into(),
                     Some('?') => ZeroOrOne {
                         node: Box::new(node),
                         brackets: false,
-                    },
+                    }
+                    .into(),
                     _ => node,
                 },
                 Rule::rule_body => ZeroOrOne {
                     node: Box::new(node),
                     brackets: true,
-                },
+                }
+                .into(),
                 _ => unreachable!(),
             }
         }
+
         Rule::rule_elem => parse_node(pair.into_inner().next().unwrap()),
-        Rule::token_rule => {
-            let mut inner = pair.into_inner();
-            let token_name = inner.next().unwrap().as_str().to_owned();
-            let token_lit = parse_node(inner.next().unwrap());
-            TokenRule {
-                name: token_name,
-                literal: Box::new(token_lit),
-            }
-        }
+
         Rule::rule_name => RuleRef {
             name: pair.as_str().to_owned(),
-        },
+        }
+        .into(),
+
         Rule::token_name => TokenRef {
             name: pair.as_str().to_owned(),
             replaced_lit: None,
-        },
+        }
+        .into(),
+
         Rule::token_lit => TokenLit {
             literal: pair.as_str().to_owned(),
-        },
+        }
+        .into(),
+
         _ => unreachable!(),
     }
 }
