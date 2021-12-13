@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::Node::*;
-use crate::ast::{Grammar, Node};
+use crate::ast::{Grammar, Node, ParserRule, TokenRule};
 
 const EOF: &str = "EOF";
 const ILLEGAL: &str = "ILLEGAL";
@@ -39,13 +39,13 @@ impl Transform {
 
         let mut transform = Transform::new();
 
-        let token_rules: Vec<Node> = token_rules
+        let token_rules = token_rules
             .iter()
-            .map(|node| transform.process_token_rule(node))
+            .map(|rule| transform.process_token_rule(rule))
             .collect();
-        let parser_rules: Vec<Node> = parser_rules
+        let parser_rules = parser_rules
             .iter()
-            .map(|node| transform.process_parser_rule(node))
+            .map(|rule| transform.process_parser_rule(rule))
             .collect();
         (
             Grammar {
@@ -60,29 +60,22 @@ impl Transform {
         self.errors.push(format!("ERROR: {}", msg));
     }
 
-    fn process_token_rule(&mut self, node: &Node) -> Node {
-        match node {
-            TokenRule { name, literal } => {
-                let lit = match literal.as_ref() {
-                    TokenLit { literal } => strip_quotes(literal),
-                    _ => unreachable!(),
-                };
-                self.literals.insert(lit, (name.to_string(), None));
-                self.token_names.insert(name.to_string());
-
-                node.clone()
-            }
+    fn process_token_rule(&mut self, rule: &TokenRule) -> TokenRule {
+        let TokenRule { name, literal } = rule;
+        let lit = match literal {
+            TokenLit { literal } => strip_quotes(literal),
             _ => unreachable!(),
-        }
+        };
+        self.literals.insert(lit, (name.to_string(), None));
+        self.token_names.insert(name.to_string());
+
+        rule.clone()
     }
 
-    fn process_parser_rule(&mut self, node: &Node) -> Node {
-        match node {
-            ParserRule { name, node } => ParserRule {
-                name: name.to_string(),
-                node: Box::new(self.process_node(node)),
-            },
-            _ => unreachable!(),
+    fn process_parser_rule(&mut self, rule: &ParserRule) -> ParserRule {
+        ParserRule {
+            name: rule.name.to_string(),
+            node: self.process_node(&rule.node),
         }
     }
 
@@ -129,8 +122,7 @@ impl Transform {
                             replaced_lit: Some(literal.to_string()),
                         };
                         let ref_copy = token_ref.clone();
-                        self.literals
-                            .insert(lit, (name, Some(token_ref)));
+                        self.literals.insert(lit, (name, Some(token_ref)));
                         ref_copy
                     }
                     None => {
@@ -142,7 +134,6 @@ impl Transform {
                     }
                 }
             }
-            _ => unreachable!(),
         }
     }
 }

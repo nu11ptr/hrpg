@@ -1,11 +1,41 @@
 extern crate pest;
 
-use pest::error::Error;
 use pest::iterators::Pair;
 use pest::Parser;
 
 use self::pest::iterators::Pairs;
 use Node::*;
+
+// *** Rules ***
+
+enum RuleType {
+    Parser(ParserRule),
+    Token(TokenRule),
+}
+
+impl From<ParserRule> for RuleType {
+    fn from(rule: ParserRule) -> Self {
+        RuleType::Parser(rule)
+    }
+}
+
+impl From<TokenRule> for RuleType {
+    fn from(rule: TokenRule) -> Self {
+        RuleType::Token(rule)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ParserRule {
+    pub name: String,
+    pub node: Node,
+}
+
+#[derive(Clone, Debug)]
+pub struct TokenRule {
+    pub name: String,
+    pub literal: Node,
+}
 
 trait Comment {
     fn comment(&self) -> String;
@@ -52,17 +82,6 @@ pub enum Node {
     // TOKEN_LIT
     TokenLit {
         literal: String,
-    },
-
-    // parser_rule
-    ParserRule {
-        name: String,
-        node: Box<Node>,
-    },
-    // token_rule
-    TokenRule {
-        name: String,
-        literal: Box<Node>,
     },
 }
 
@@ -129,10 +148,6 @@ impl Comment for Node {
             .to_owned(),
 
             TokenLit { literal } => format!("\"{}\"", literal),
-
-            ParserRule { name, node } => format!("{}: {}", name, node.comment()),
-
-            TokenRule { name, literal } => format!("{}: {}", name, literal.comment()),
         }
     }
 }
@@ -140,31 +155,30 @@ impl Comment for Node {
 // top_level
 #[derive(Debug)]
 pub struct Grammar {
-    pub parser_rules: Vec<Node>,
-    pub token_rules: Vec<Node>,
+    pub parser_rules: Vec<ParserRule>,
+    pub token_rules: Vec<TokenRule>,
 }
 
-#[derive(Parser)]
+#[derive(pest_derive::Parser)]
 #[grammar = "HRPG.pest"]
 struct HRPGParser;
 
-pub fn parse_hrpg(data: &str) -> Result<Grammar, Error<Rule>> {
-    let nodes: Vec<Node> = HRPGParser::parse(Rule::top_level, data)?
+pub fn parse_hrpg(data: &str) -> Result<Grammar, pest::error::Error<Rule>> {
+    let nodes: Vec<RuleType> = HRPGParser::parse(Rule::top_level, data)?
         .next()
         .unwrap()
         .into_inner()
         .filter(|p| p.as_rule() == Rule::entry)
-        .map(parse_node)
+        .map(parse_rule_type)
         .collect();
 
-    let mut parser_rules: Vec<Node> = vec![];
-    let mut token_rules: Vec<Node> = vec![];
+    let mut parser_rules: Vec<ParserRule> = vec![];
+    let mut token_rules: Vec<TokenRule> = vec![];
 
     for node in nodes {
         match node {
-            ParserRule { .. } => parser_rules.push(node),
-            TokenRule { .. } => token_rules.push(node),
-            _ => unreachable!(),
+            RuleType::Parser(rule) => parser_rules.push(rule),
+            RuleType::Token(rule) => token_rules.push(rule),
         }
     }
 
@@ -174,18 +188,38 @@ pub fn parse_hrpg(data: &str) -> Result<Grammar, Error<Rule>> {
     })
 }
 
-fn parse_node(pair: Pair<Rule>) -> Node {
+fn parse_rule_type(pair: pest::iterators::Pair<Rule>) -> RuleType {
     match pair.as_rule() {
-        Rule::entry => parse_node(pair.into_inner().next().unwrap()),
+        Rule::entry => parse_rule_type(pair.into_inner().next().unwrap()),
+
         Rule::parse_rule => {
             let mut inner_rules = pair.into_inner();
             let rule_name = inner_rules.next().unwrap().as_str().to_owned();
             let rule_body = parse_node(inner_rules.next().unwrap());
             ParserRule {
                 name: rule_name,
-                node: Box::new(rule_body),
+                node: rule_body,
             }
+            .into()
         }
+
+        Rule::token_rule => {
+            let mut inner = pair.into_inner();
+            let token_name = inner.next().unwrap().as_str().to_owned();
+            let token_lit = parse_node(inner.next().unwrap());
+            TokenRule {
+                name: token_name,
+                literal: token_lit,
+            }
+            .into()
+        }
+
+        _ => unreachable!(),
+    }
+}
+
+fn parse_node(pair: Pair<Rule>) -> Node {
+    match pair.as_rule() {
         Rule::rule_body => {
             let mut nodes: Vec<Node> = pair.into_inner().map(parse_node).collect();
             match nodes.len() {
@@ -244,15 +278,6 @@ fn parse_node(pair: Pair<Rule>) -> Node {
             }
         }
         Rule::rule_elem => parse_node(pair.into_inner().next().unwrap()),
-        Rule::token_rule => {
-            let mut inner = pair.into_inner();
-            let token_name = inner.next().unwrap().as_str().to_owned();
-            let token_lit = parse_node(inner.next().unwrap());
-            TokenRule {
-                name: token_name,
-                literal: Box::new(token_lit),
-            }
-        }
         Rule::rule_name => RuleRef {
             name: pair.as_str().to_owned(),
         },
