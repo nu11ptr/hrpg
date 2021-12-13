@@ -28,11 +28,10 @@ to generated parser differences (precedence handling, etc.) and a slimmer featur
 
 NOTE: Subject to change
 
-1. **Frontend**: Lex/Parse Grammar --> Grammar AST
-2. **Frontend**: Process/Optimize Grammar --> New Grammar AST
+1. Lex/Parse Grammar --> Grammar AST
+2. Process/Optimize Grammar (and check for errors) --> New Grammar AST
 3. Generate Lexer/Parser --> Language Agnostic AST
-4. **Backend**: Transform into Specific Language --> Language Specific AST
-5. **Backend**: Write Lexer/Parser --> Lexer/Parser Language Files
+4. Walk Language Agnostic AST --> Lexer/Parser Language Files
 
 ## Status
 

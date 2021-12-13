@@ -7,6 +7,8 @@ use clap::Parser;
 
 use hrpg::ast::parse_hrpg;
 use hrpg::diagram::draw_diagram;
+use hrpg::lang::rust::RustConfig;
+use hrpg::parser_gen::ParserGen;
 use hrpg::transform::Transform;
 
 /// Human Readable Parser Generator
@@ -42,6 +44,8 @@ struct Draw {
 }
 
 fn main() {
+    env_logger::init();
+
     let options = Args::parse();
 
     let result = match options.sub_cmd {
@@ -68,13 +72,17 @@ fn process_build(build: &Build) -> Result<Option<String>, Box<dyn Error>> {
     let data = fs::read_to_string(&build.input_file)?;
     let g = parse_hrpg(&data)?;
 
-    println!("Original AST: {:?}\n", g);
+    println!("Original AST: {:#?}\n", g);
 
     let (g2, transform) = Transform::process(&g);
-    println!("Transformed AST: {:?}\n", g2);
+    println!("Transformed AST: {:#?}\n", g2);
 
-    println!("Tokens: {:?}", &transform.token_names);
-    println!("Errors: {:?}", &transform.errors);
+    println!("Tokens: {:#?}", &transform.token_names);
+    println!("Errors: {:#?}", &transform.errors);
+
+    let gen = ParserGen::new(RustConfig);
+    let spec = gen.generate(&g2);
+    println!("Spec: {:#?}", spec);
 
     Ok(None)
 }
@@ -88,6 +96,6 @@ fn process_draw(draw: &Draw) -> Result<Option<String>, Box<dyn Error>> {
     if transform.errors.is_empty() {
         Ok(Some(format!("{}", draw_diagram(&g2))))
     } else {
-        return Err(format!("{:?}", &transform.errors).into())
+        Err(format!("{:?}", &transform.errors).into())
     }
 }

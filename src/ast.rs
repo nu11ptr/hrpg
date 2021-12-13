@@ -31,13 +31,25 @@ pub struct ParserRule {
     pub node: Node,
 }
 
+impl Comment for ParserRule {
+    fn comment(&self) -> String {
+        format!("{}: {}", &self.name, self.node.comment())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TokenRule {
     pub name: String,
     pub literal: Node,
 }
 
-trait Comment {
+impl Comment for TokenRule {
+    fn comment(&self) -> String {
+        format!("{}: {}", &self.name, self.literal.comment())
+    }
+}
+
+pub trait Comment {
     fn comment(&self) -> String;
 }
 
