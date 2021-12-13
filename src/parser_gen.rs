@@ -98,6 +98,7 @@ pub trait LangCodeGen<W: fmt::Write> {
 
 struct FuncName<'n> {
     base: &'n str,
+    sub_name: Option<&'n str>,
     sub_num: Option<u32>,
 }
 
@@ -105,11 +106,12 @@ impl<'n> FuncName<'n> {
     pub fn new(base: &'n str) -> Self {
         FuncName {
             base,
+            sub_name: None,
             sub_num: None,
         }
     }
 
-    pub fn to_sub(&self) -> Self {
+    pub fn to_num_sub(&self) -> Self {
         let sub_num = Some(match self.sub_num {
             Some(num) => num + 1,
             None => 1,
@@ -117,14 +119,29 @@ impl<'n> FuncName<'n> {
 
         FuncName {
             base: self.base,
+            sub_name: self.sub_name,
             sub_num,
         }
     }
 
+    pub fn to_named_sub(&self, sub_name: &'n str) -> Self {
+        FuncName {
+            base: self.base,
+            sub_name: Some(sub_name),
+            sub_num: self.sub_num,
+        }
+    }
+
     pub fn name(&self, case: convert_case::Case) -> String {
-        match self.sub_num {
-            Some(sub_num) => format!("parse_{}_sub{}", self.base, sub_num),
-            None => format!("parse_{}", self.base),
+        match (self.sub_name, self.sub_num) {
+            (Some(sub_name), Some(sub_num)) => {
+                format!("parse_{}_{}_sub{}", self.base, sub_name, sub_num)
+            }
+            (Some(sub_name), None) => {
+                format!("parse_{}_{}", self.base, sub_name)
+            }
+            (None, Some(sub_num)) => format!("parse_{}_sub{}", self.base, sub_num),
+            (None, None) => format!("parse_{}", self.base),
         }
         .to_case(case)
     }
@@ -222,9 +239,7 @@ impl<L: LangConfig> ParserGen<L> {
         match node {
             // Binding - use the name of binding as function name, NOT `curr_func` as base like `Alternatives/MultipartBody`
             Node::Binding { name, node } => {
-                // FIXME: This isn't quite right... we will need to modify `FuncName` as this nests binding names
-                let func_base = format!("{}_{}", curr_func.base_name(), name);
-                self.make_sub_func(&FuncName::new(&func_base), node, &node.comment(), kind)
+                self.make_sub_func(&curr_func.to_named_sub(name), node, &node.comment(), kind)
             },
             // If top level of function, we simply process each node and flatten
             // (only this an `MultipartBody` truly return more than one entry)
@@ -235,14 +250,14 @@ impl<L: LangConfig> ParserGen<L> {
                 })
                 .collect(),
             // If not top level, then we need to force a sub-function to handle it
-            Node::Alternatives { .. } => self.make_sub_func(&curr_func.to_sub(), node, comment, kind),
+            Node::Alternatives { .. } => self.make_sub_func(&curr_func.to_num_sub(), node, comment, kind),
             // If top level of function, we simply process each node and flatten
             Node::MultipartBody { nodes } if top_level => nodes
                 .iter()
                 .flat_map(|node| self.process_node(node, curr_func,&node.comment(), MatchKind::Once, false))
                 .collect(),
             // If not top level, then we need to force a sub-function to handle it
-            Node::MultipartBody { .. } => self.make_sub_func(&curr_func.to_sub(), node, comment, kind),
+            Node::MultipartBody { .. } => self.make_sub_func(&curr_func.to_num_sub(), node, comment, kind),
             Node::ZeroOrMore { node } => {
                 self.process_node(node, curr_func,&node.comment(), MatchKind::ZeroOrMore, false)
             }
