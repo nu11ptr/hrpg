@@ -1,6 +1,8 @@
 use crate::ast::{Comment, Grammar, Node};
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::fmt;
+use std::rc::Rc;
 
 use convert_case::Casing;
 
@@ -101,39 +103,42 @@ pub trait LangCodeGen<W: fmt::Write> {
     fn match_rule_once_or_more(&self, w: &mut W, action: &MatchRule, func: &Function);
 }
 
-struct FuncName<'n> {
+struct FuncData<'n> {
     base: &'n str,
     sub_name: Option<&'n str>,
     sub_num: Option<u32>,
+
+    next_sub_num: Rc<Cell<u32>>,
 }
 
-impl<'n> FuncName<'n> {
+impl<'n> FuncData<'n> {
     pub fn new(base: &'n str) -> Self {
-        FuncName {
+        FuncData {
             base,
             sub_name: None,
             sub_num: None,
+            next_sub_num: Rc::new(Cell::new(1)),
         }
     }
 
     pub fn to_num_sub(&self) -> Self {
-        let sub_num = Some(match self.sub_num {
-            Some(num) => num + 1,
-            None => 1,
-        });
+        let sub_num = self.next_sub_num.get();
+        self.next_sub_num.set(sub_num + 1);
 
-        FuncName {
+        FuncData {
             base: self.base,
             sub_name: self.sub_name,
-            sub_num,
+            sub_num: Some(sub_num),
+            next_sub_num: self.next_sub_num.clone(),
         }
     }
 
     pub fn to_named_sub(&self, sub_name: &'n str) -> Self {
-        FuncName {
+        FuncData {
             base: self.base,
             sub_name: Some(sub_name),
             sub_num: self.sub_num,
+            next_sub_num: self.next_sub_num.clone(),
         }
     }
 
@@ -178,7 +183,7 @@ impl<L: LangConfig> ParserGen<L> {
 
         for rule in &grammar.parser_rules {
             log::trace!("Starting parser rule: {}", &rule.name);
-            self.make_func(&FuncName::new(&rule.name), &rule.node, &rule.comment());
+            self.make_func(&FuncData::new(&rule.name), &rule.node, &rule.comment());
             log::trace!("Ending parser rule: {}", &rule.name);
         }
 
@@ -189,14 +194,14 @@ impl<L: LangConfig> ParserGen<L> {
         }
     }
 
-    fn make_func(&mut self, func_name: &FuncName, node: &Node, comment: &str) {
+    fn make_func(&mut self, func_data: &FuncData, node: &Node, comment: &str) {
         // Make function name and convert to preferred case of lang
-        let name = func_name.name(self.lang_config.function_case());
+        let name = func_data.name(self.lang_config.function_case());
 
         let ret_on_match = !matches!(node, Node::MultipartBody { .. });
 
         log::trace!("Starting new function: {}", &name);
-        let actions = self.process_node(node, func_name, comment, MatchKind::Once, true);
+        let actions = self.process_node(node, func_data, comment, MatchKind::Once, true);
         log::trace!("Ending function: {}", &name);
 
         self.functions.push(Function {
@@ -207,28 +212,17 @@ impl<L: LangConfig> ParserGen<L> {
         })
     }
 
-    fn make_sub_func(
-        &mut self,
-        name: &FuncName,
-        node: &Node,
-        comment: &str,
-        kind: MatchKind,
-    ) -> Vec<MatchRule> {
-        self.make_func(name, node, comment);
-        self.process_rule_ref(name, comment, kind)
-    }
-
     fn process_rule_ref(
         &self,
-        func_name: &FuncName,
+        func_data: &FuncData,
         comment: &str,
         kind: MatchKind,
     ) -> Vec<MatchRule> {
-        let var_name = func_name.base_name().to_case(self.lang_config.var_case());
+        let var_name = func_data.base_name().to_case(self.lang_config.var_case());
 
         vec![MatchRule::Parser {
             match_kind: kind,
-            func_name: func_name.name(self.lang_config.function_case()),
+            func_name: func_data.name(self.lang_config.function_case()),
             var_name,
             comment: comment.to_string(),
         }]
@@ -237,7 +231,7 @@ impl<L: LangConfig> ParserGen<L> {
     fn process_node(
         &mut self,
         node: &Node,
-        curr_func: &FuncName,
+        curr_func: &FuncData,
         comment: &str,
         match_kind: MatchKind,
         top_level: bool,
@@ -290,7 +284,7 @@ impl<L: LangConfig> ParserGen<L> {
             Node::ZeroOrOne { node, .. } => {
                 self.process_node(node, curr_func, comment, MatchKind::ZeroOrOnce, false)
             }
-            Node::RuleRef { name } =>  self.process_rule_ref(&FuncName::new(name), comment, match_kind),
+            Node::RuleRef { name } =>  self.process_rule_ref(&FuncData::new(name), comment, match_kind),
             Node::TokenRef { name,.. } => {
                 let var_name = name.to_case(self.lang_config.var_case());
 
