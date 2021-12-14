@@ -15,13 +15,13 @@ pub enum MatchKind {
 #[derive(Debug)]
 pub enum MatchRule {
     Token {
-        kind: MatchKind,
+        match_kind: MatchKind,
         token_name: String,
         var_name: String,
         comment: String,
     },
     Parser {
-        kind: MatchKind,
+        match_kind: MatchKind,
         func_name: String,
         var_name: String,
         comment: String,
@@ -31,6 +31,7 @@ pub enum MatchRule {
 #[derive(Debug)]
 pub struct Function {
     name: String,
+    comment: String,
     ret_on_match: bool,
     actions: Vec<MatchRule>,
 }
@@ -64,13 +65,17 @@ pub trait LangCodeGen<W: fmt::Write> {
 
     fn action(&self, w: &mut W, action: &MatchRule, func: &Function) {
         match action {
-            MatchRule::Token { kind, .. } => match kind {
+            MatchRule::Token {
+                match_kind: kind, ..
+            } => match kind {
                 MatchKind::Once => self.match_token_once(w, action, func),
                 MatchKind::ZeroOrOnce => self.match_token_zero_or_once(w, action, func),
                 MatchKind::ZeroOrMore => self.match_token_zero_or_more(w, action, func),
                 MatchKind::OnceOrMore => self.match_token_once_or_more(w, action, func),
             },
-            MatchRule::Parser { kind, .. } => match kind {
+            MatchRule::Parser {
+                match_kind: kind, ..
+            } => match kind {
                 MatchKind::Once => self.match_rule_once(w, action, func),
                 MatchKind::ZeroOrOnce => self.match_rule_zero_or_once(w, action, func),
                 MatchKind::ZeroOrMore => self.match_rule_zero_or_more(w, action, func),
@@ -196,6 +201,7 @@ impl<L: LangConfig> ParserGen<L> {
 
         self.functions.push(Function {
             name,
+            comment: comment.to_string(),
             ret_on_match,
             actions,
         })
@@ -221,7 +227,7 @@ impl<L: LangConfig> ParserGen<L> {
         let var_name = func_name.base_name().to_case(self.lang_config.var_case());
 
         vec![MatchRule::Parser {
-            kind,
+            match_kind: kind,
             func_name: func_name.name(self.lang_config.function_case()),
             var_name,
             comment: comment.to_string(),
@@ -233,16 +239,20 @@ impl<L: LangConfig> ParserGen<L> {
         node: &Node,
         curr_func: &FuncName,
         comment: &str,
-        kind: MatchKind,
+        match_kind: MatchKind,
         top_level: bool,
     ) -> Vec<MatchRule> {
         match node {
             // Binding - use the name of binding as function name, NOT `curr_func` as base like `Alternatives/MultipartBody`
-            Node::Binding { name, node } => {
-                self.make_sub_func(&curr_func.to_named_sub(name), node, &node.comment(), kind)
+            Node::Binding { name, node: next_node } => {
+                let func_name = &curr_func.to_named_sub(name);
+                // Function gets comment from the binding itself
+                self.make_func(func_name, next_node, &node.comment());
+                // The rule to process gets the inherited comment
+                self.process_rule_ref(func_name, comment, match_kind)
             },
             // If top level of function, we simply process each node and flatten
-            // (only this an `MultipartBody` truly return more than one entry)
+            // (only this and `MultipartBody` truly return more than one entry)
             Node::Alternatives { nodes } if top_level => nodes
                 .iter()
                 .flat_map(|node| {
@@ -250,30 +260,43 @@ impl<L: LangConfig> ParserGen<L> {
                 })
                 .collect(),
             // If not top level, then we need to force a sub-function to handle it
-            Node::Alternatives { .. } => self.make_sub_func(&curr_func.to_num_sub(), node, comment, kind),
+            Node::Alternatives { .. } => {
+                let func_name = &curr_func.to_num_sub();
+                // Function gets comment from the binding itself
+                self.make_func(func_name, node, &node.comment());
+                // The rule to process gets the inherited comment
+                self.process_rule_ref(func_name, comment, match_kind)
+            },
             // If top level of function, we simply process each node and flatten
+            // (only this and `Alternatives` truly return more than one entry)
             Node::MultipartBody { nodes } if top_level => nodes
                 .iter()
                 .flat_map(|node| self.process_node(node, curr_func,&node.comment(), MatchKind::Once, false))
                 .collect(),
             // If not top level, then we need to force a sub-function to handle it
-            Node::MultipartBody { .. } => self.make_sub_func(&curr_func.to_num_sub(), node, comment, kind),
+            Node::MultipartBody { .. } => {
+                let func_name = &curr_func.to_num_sub();
+                // Function gets comment from the binding itself
+                self.make_func(func_name, node, &node.comment());
+                // The rule to process gets the inherited comment
+                self.process_rule_ref(func_name, comment, match_kind)
+            },
             Node::ZeroOrMore { node } => {
-                self.process_node(node, curr_func,&node.comment(), MatchKind::ZeroOrMore, false)
+                self.process_node(node, curr_func, comment, MatchKind::ZeroOrMore, false)
             }
             Node::OneOrMore { node } => {
-                self.process_node(node, curr_func,&node.comment(), MatchKind::OnceOrMore, false)
+                self.process_node(node, curr_func, comment, MatchKind::OnceOrMore, false)
             }
             Node::ZeroOrOne { node, .. } => {
-                self.process_node(node, curr_func,&node.comment(), MatchKind::ZeroOrOnce, false)
+                self.process_node(node, curr_func, comment, MatchKind::ZeroOrOnce, false)
             }
-            Node::RuleRef { name } =>  self.process_rule_ref(&FuncName::new(name), comment, kind),
+            Node::RuleRef { name } =>  self.process_rule_ref(&FuncName::new(name), comment, match_kind),
             Node::TokenRef { name,.. } => {
                 let var_name = name.to_case(self.lang_config.var_case());
 
                 vec![
                     MatchRule::Token {
-                        kind,
+                        match_kind,
                         // TODO: needs to conform to generated token naming
                         token_name: name.to_owned(),
                         var_name,
